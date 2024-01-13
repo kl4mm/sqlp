@@ -1,11 +1,18 @@
 #[derive(Debug, PartialEq)]
 pub enum Token {
+    LParen,
+    RParen,
+
     Select,
     Insert,
     Update,
     Delete,
     From,
     Where,
+    Join,
+    On,
+    Using,
+    As,
     Conjunction,
     Disjunction,
     Negation,
@@ -24,8 +31,6 @@ pub enum Token {
     StringConst(String),
     NumericConst(u64),
 
-    Reference(String), // eg column1, table1.column1 or table1
-
     TableAndColumnReference(String, String),
     TableOrColumnReference(String),
 }
@@ -35,12 +40,19 @@ impl Into<Token> for &str {
         let lower = self.to_lowercase();
 
         match &lower[..] {
+            "(" => Token::LParen,
+            ")" => Token::RParen,
+
             "select" => Token::Select,
             "insert" => Token::Insert,
             "update" => Token::Update,
             "delete" => Token::Delete,
             "from" => Token::From,
             "where" => Token::Where,
+            "join" => Token::Join,
+            "on" => Token::On,
+            "using" => Token::Using,
+            "as" => Token::As,
             "and" => Token::Conjunction,
             "or" => Token::Disjunction,
             "not" => Token::Disjunction,
@@ -90,6 +102,7 @@ pub fn tokenise(mut src: &str) -> Vec<Token> {
             continue;
         }
 
+        dbg!(s);
         tokens.push(s.into());
 
         src = &src[s.len()..];
@@ -105,9 +118,12 @@ fn chop<'a>(src: &'a str) -> &'a str {
         return "";
     }
 
-    if &src[0..1] == "," {
-        return ",";
-    }
+    match &src[0..1] {
+        c @ "," => return c,
+        c @ "(" => return c,
+        c @ ")" => return c,
+        _ => {}
+    };
 
     while i < src.len() {
         if &src[i..i + 1] == " " || &src[i..i + 1] == "\n" {
@@ -118,7 +134,10 @@ fn chop<'a>(src: &'a str) -> &'a str {
     }
 
     let tmp = &src[0..i];
-    if tmp.len() > 0 && &tmp[tmp.len() - 1..tmp.len()] == "," && tmp[0..i].len() > 1 {
+    if i != 0
+        && (&tmp[tmp.len() - 1..tmp.len()] == "," || &tmp[tmp.len() - 1..tmp.len()] == ")")
+        && tmp[0..i].len() > 1
+    {
         i -= 1
     }
 
@@ -218,6 +237,35 @@ mod test {
                     Token::NumericConst(1234),
                 ],
             },
+            TestCase {
+                input: "select table.columnA, table.columnB from table
+                    join tableB on (table.columnA = tableB.columnA)
+                    where table.columnA = \"1234\" and table.columnB > 1234",
+                want: vec![
+                    Token::Select,
+                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::Comma,
+                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::From,
+                    Token::TableOrColumnReference("table".into()),
+                    Token::Join,
+                    Token::TableOrColumnReference("tableb".into()),
+                    Token::On,
+                    Token::LParen,
+                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::Eq,
+                    Token::TableAndColumnReference("tableb".into(), "columna".into()),
+                    Token::RParen,
+                    Token::Where,
+                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::Eq,
+                    Token::StringConst("1234".into()),
+                    Token::Conjunction,
+                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::Gt,
+                    Token::NumericConst(1234),
+                ],
+            },
         ];
 
         for TestCase { input, want } in tcs {
@@ -253,6 +301,14 @@ mod test {
             TestCase {
                 input: ",",
                 want: ",",
+            },
+            TestCase {
+                input: "(table",
+                want: "(",
+            },
+            TestCase {
+                input: "table)",
+                want: "table",
             },
         ];
 

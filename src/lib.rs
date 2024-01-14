@@ -99,9 +99,9 @@ impl Into<Token> for &str {
 pub fn tokenise(mut src: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
 
-    while src.len() > 0 {
+    while !src.is_empty() {
         let s = chop(src);
-        if s.len() == 0 {
+        if s.is_empty() {
             src = &src[1..];
             continue;
         }
@@ -123,6 +123,12 @@ macro_rules! check_str {
             false
         )
     };
+
+    ($str:ident, $i:expr, $char:expr) => {
+        (
+            &$str[$i..$i+1] == $char
+        )
+    };
 }
 
 macro_rules! check {
@@ -136,10 +142,10 @@ macro_rules! check {
     };
 }
 
-fn chop<'a>(src: &'a str) -> &'a str {
+fn chop(src: &str) -> &str {
     let mut i = 0;
 
-    if src.len() == 0 {
+    if src.is_empty() {
         return "";
     }
 
@@ -151,9 +157,17 @@ fn chop<'a>(src: &'a str) -> &'a str {
         _ => {}
     };
 
+    let mut iq = false;
     while i < src.len() {
-        if check_str!(src, i, [" ", "\n", "(", ")", ","]) {
+        if !iq && check_str!(src, i, [" ", "\n", "(", ")", ","]) {
             break;
+        }
+
+        let q = check_str!(src, i, "\"");
+        if iq && q {
+            iq = false;
+        } else if !iq && q {
+            iq = true;
         }
 
         i += 1
@@ -169,12 +183,12 @@ fn chop<'a>(src: &'a str) -> &'a str {
 
 // Keep to compare later
 #[allow(unused)]
-fn chopc<'a>(src: &'a str) -> String {
+fn chopc(src: &str) -> String {
     let cs: Vec<char> = src.chars().collect();
 
     let mut i = 0;
 
-    if cs.len() == 0 {
+    if cs.is_empty() {
         return String::new();
     }
 
@@ -262,11 +276,10 @@ mod test {
                 input: ";,)(",
                 want: vec![Token::Semicolon, Token::Comma, Token::RParen, Token::LParen],
             },
-            // TODO: allow symbols/new lines in string literals
-            // TestCase {
-            //     input: "\";,)(\n\"",
-            //     want: vec![Token::StringLiteral(";,)(".into())],
-            // },
+            TestCase {
+                input: "\";,)(\n\"\nand",
+                want: vec![Token::StringLiteral(";,)(\n".into()), Token::Conjunction],
+            },
             TestCase {
                 input: "into(table.columna,table.columnb)values(1,2);",
                 want: vec![

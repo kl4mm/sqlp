@@ -7,6 +7,8 @@ pub enum Token {
     Insert,
     Update,
     Delete,
+    Into,
+    Values,
     From,
     Where,
     Join,
@@ -47,6 +49,8 @@ impl Into<Token> for &str {
             "insert" => Token::Insert,
             "update" => Token::Update,
             "delete" => Token::Delete,
+            "into" => Token::Into,
+            "values" => Token::Values,
             "from" => Token::From,
             "where" => Token::Where,
             "join" => Token::Join,
@@ -110,11 +114,22 @@ pub fn tokenise(mut src: &str) -> Vec<Token> {
     tokens
 }
 
-macro_rules! check_end {
-    ($str:ident, [ $($char:expr),* ]) => {
+macro_rules! check_str {
+    ($str:ident, $i:expr, [ $($char:expr),* ]) => {
         (
             $(
-               &$str[$str.len() - 1..$str.len()] == $char ||
+                &$str[$i..$i+1] == $char ||
+            )*
+            false
+        )
+    };
+}
+
+macro_rules! check {
+    ($c:expr, [ $($char:expr),* ]) => {
+        (
+            $(
+               $c == $char ||
             )*
             false
         )
@@ -137,7 +152,7 @@ fn chop<'a>(src: &'a str) -> &'a str {
     };
 
     while i < src.len() {
-        if &src[i..i + 1] == " " || &src[i..i + 1] == "\n" {
+        if check_str!(src, i, [" ", "\n", "(", ")", ","]) {
             break;
         }
 
@@ -145,11 +160,46 @@ fn chop<'a>(src: &'a str) -> &'a str {
     }
 
     let tmp = &src[0..i];
-    if i != 0 && check_end!(tmp, [",", ")", ";"]) && tmp[0..i].len() > 1 {
+    if i != 0 && check_str!(tmp, tmp.len() - 1, [",", ")", ";"]) && tmp[0..i].len() > 1 {
         i -= 1
     }
 
     &src[0..i]
+}
+
+// Keep to compare later
+#[allow(unused)]
+fn chopc<'a>(src: &'a str) -> String {
+    let cs: Vec<char> = src.chars().collect();
+
+    let mut i = 0;
+
+    if cs.len() == 0 {
+        return String::new();
+    }
+
+    match cs[0] {
+        c @ ',' => return c.into(),
+        c @ '(' => return c.into(),
+        c @ ')' => return c.into(),
+        c @ ';' => return c.into(),
+        _ => {}
+    };
+
+    while i < cs.len() {
+        if check!(cs[i], [' ', '\n', '(', ')', ',']) {
+            break;
+        }
+
+        i += 1
+    }
+
+    let tmp = &cs[0..i];
+    if i != 0 && check!(tmp[tmp.len() - 1], [',', ')', ';']) && tmp[0..i].len() > 1 {
+        i -= 1
+    }
+
+    cs[0..i].iter().collect()
 }
 
 #[cfg(test)]
@@ -212,15 +262,29 @@ mod test {
                 input: ";,)(",
                 want: vec![Token::Semicolon, Token::Comma, Token::RParen, Token::LParen],
             },
-            TestCase {
-                input: "\";,)(\"",
-                want: vec![Token::StringLiteral(";,)(".into())],
-            },
-            // TODO: allow new lines in string literals
+            // TODO: allow symbols/new lines in string literals
             // TestCase {
-            //     input: "\"\n\"",
-            //     want: vec![Token::StringConst("\n".into())],
+            //     input: "\";,)(\n\"",
+            //     want: vec![Token::StringLiteral(";,)(".into())],
             // },
+            TestCase {
+                input: "into(table.columna,table.columnb)values(1,2);",
+                want: vec![
+                    Token::Into,
+                    Token::LParen,
+                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::Comma,
+                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::RParen,
+                    Token::Values,
+                    Token::LParen,
+                    Token::IntegerLiteral(1),
+                    Token::Comma,
+                    Token::IntegerLiteral(2),
+                    Token::RParen,
+                    Token::Semicolon,
+                ],
+            },
             TestCase {
                 input: "select * from table;",
                 want: vec![
@@ -292,6 +356,33 @@ mod test {
                     Token::IntegerLiteral(1234),
                 ],
             },
+            TestCase {
+                input: "insert into table (columnA, columnB, columnC, columnD) values (\"a\", 1, \"b\", 2)",
+                want: vec![
+                    Token::Insert,
+                    Token::Into,
+                    Token::TableOrColumnReference("table".into()),
+                    Token::LParen,
+                    Token::TableOrColumnReference("columna".into()),
+                    Token::Comma,
+                    Token::TableOrColumnReference("columnb".into()),
+                    Token::Comma,
+                    Token::TableOrColumnReference("columnc".into()),
+                    Token::Comma,
+                    Token::TableOrColumnReference("columnd".into()),
+                    Token::RParen,
+                    Token::Values,
+                    Token::LParen,
+                    Token::StringLiteral("a".into()),
+                    Token::Comma,
+                    Token::IntegerLiteral(1),
+                    Token::Comma,
+                    Token::StringLiteral("b".into()),
+                    Token::Comma,
+                    Token::IntegerLiteral(2),
+                    Token::RParen,
+                ]
+            }
         ];
 
         for TestCase { input, want } in tcs {

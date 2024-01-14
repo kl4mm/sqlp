@@ -28,8 +28,8 @@ pub enum Token {
     Gt,
     Ge,
 
-    StringConst(String),
-    NumericConst(u64),
+    StringLiteral(String),
+    IntegerLiteral(u64),
 
     TableAndColumnReference(String, String),
     TableOrColumnReference(String),
@@ -69,15 +69,15 @@ impl Into<Token> for &str {
             "<=" => Token::Le,
 
             s => {
-                // Try numeric
+                // Try integer
                 if let Ok(n) = s.parse::<u64>() {
-                    return Token::NumericConst(n);
+                    return Token::IntegerLiteral(n);
                 }
 
                 // Try string
                 let mut cs = s.chars();
                 if cs.next() == Some('"') && cs.next_back() == Some('"') {
-                    return Token::StringConst(cs.collect());
+                    return Token::StringLiteral(cs.collect());
                 }
 
                 // Try reference
@@ -102,13 +102,23 @@ pub fn tokenise(mut src: &str) -> Vec<Token> {
             continue;
         }
 
-        dbg!(s);
         tokens.push(s.into());
 
         src = &src[s.len()..];
     }
 
     tokens
+}
+
+macro_rules! check_end {
+    ($str:ident, [ $($char:expr),* ]) => {
+        (
+            $(
+               &$str[$str.len() - 1..$str.len()] == $char ||
+            )*
+            false
+        )
+    };
 }
 
 fn chop<'a>(src: &'a str) -> &'a str {
@@ -122,6 +132,7 @@ fn chop<'a>(src: &'a str) -> &'a str {
         c @ "," => return c,
         c @ "(" => return c,
         c @ ")" => return c,
+        c @ ";" => return c,
         _ => {}
     };
 
@@ -134,10 +145,7 @@ fn chop<'a>(src: &'a str) -> &'a str {
     }
 
     let tmp = &src[0..i];
-    if i != 0
-        && (&tmp[tmp.len() - 1..tmp.len()] == "," || &tmp[tmp.len() - 1..tmp.len()] == ")")
-        && tmp[0..i].len() > 1
-    {
+    if i != 0 && check_end!(tmp, [",", ")", ";"]) && tmp[0..i].len() > 1 {
         i -= 1
     }
 
@@ -197,12 +205,30 @@ mod test {
                 ],
             },
             TestCase {
-                input: "select * from table",
+                input: ")(",
+                want: vec![Token::RParen, Token::LParen],
+            },
+            TestCase {
+                input: ";,)(",
+                want: vec![Token::Semicolon, Token::Comma, Token::RParen, Token::LParen],
+            },
+            TestCase {
+                input: "\";,)(\"",
+                want: vec![Token::StringLiteral(";,)(".into())],
+            },
+            // TODO: allow new lines in string literals
+            // TestCase {
+            //     input: "\"\n\"",
+            //     want: vec![Token::StringConst("\n".into())],
+            // },
+            TestCase {
+                input: "select * from table;",
                 want: vec![
                     Token::Select,
                     Token::All,
                     Token::From,
                     Token::TableOrColumnReference("table".into()),
+                    Token::Semicolon,
                 ],
             },
             TestCase {
@@ -230,11 +256,11 @@ mod test {
                     Token::Where,
                     Token::TableAndColumnReference("table".into(), "columna".into()),
                     Token::Eq,
-                    Token::StringConst("1234".into()),
+                    Token::StringLiteral("1234".into()),
                     Token::Conjunction,
                     Token::TableAndColumnReference("table".into(), "columnb".into()),
                     Token::Gt,
-                    Token::NumericConst(1234),
+                    Token::IntegerLiteral(1234),
                 ],
             },
             TestCase {
@@ -259,11 +285,11 @@ mod test {
                     Token::Where,
                     Token::TableAndColumnReference("table".into(), "columna".into()),
                     Token::Eq,
-                    Token::StringConst("1234".into()),
+                    Token::StringLiteral("1234".into()),
                     Token::Conjunction,
                     Token::TableAndColumnReference("table".into(), "columnb".into()),
                     Token::Gt,
-                    Token::NumericConst(1234),
+                    Token::IntegerLiteral(1234),
                 ],
             },
         ];

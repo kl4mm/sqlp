@@ -1,7 +1,13 @@
+pub mod parse;
+
 #[derive(Debug, PartialEq)]
 pub enum Token {
     LParen,
     RParen,
+
+    Create,
+    Table,
+    Int,
 
     Select,
     Insert,
@@ -44,6 +50,10 @@ impl Into<Token> for &str {
         match &lower[..] {
             "(" => Token::LParen,
             ")" => Token::RParen,
+
+            "create" => Token::Create,
+            "table" => Token::Table,
+            "int" => Token::Int,
 
             "select" => Token::Select,
             "insert" => Token::Insert,
@@ -299,82 +309,82 @@ mod test {
                 ],
             },
             TestCase {
-                input: "select * from table;",
+                input: "select * from tablea;",
                 want: vec![
                     Token::Select,
                     Token::All,
                     Token::From,
-                    Token::TableOrColumnReference("table".into()),
+                    Token::TableOrColumnReference("tablea".into()),
                     Token::Semicolon,
                 ],
             },
             TestCase {
-                input: "select table.columnA, table.columnB from table",
+                input: "select tablea.columnA, tablea.columnB from tablea",
                 want: vec![
                     Token::Select,
-                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columna".into()),
                     Token::Comma,
-                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::From,
-                    Token::TableOrColumnReference("table".into()),
+                    Token::TableOrColumnReference("tablea".into()),
                 ],
             },
             TestCase {
                 input:
-                    "select table.columnA, table.columnB from table where table.columnA = \"1234\"
-                    and table.columnB > 1234",
+                    "select tablea.columnA, tablea.columnB from tablea where tablea.columnA = \"1234\"
+                    and tablea.columnB > 1234",
                 want: vec![
                     Token::Select,
-                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columna".into()),
                     Token::Comma,
-                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::From,
-                    Token::TableOrColumnReference("table".into()),
+                    Token::TableOrColumnReference("tablea".into()),
                     Token::Where,
-                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columna".into()),
                     Token::Eq,
                     Token::StringLiteral("1234".into()),
                     Token::Conjunction,
-                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::Gt,
                     Token::IntegerLiteral(1234),
                 ],
             },
             TestCase {
-                input: "select table.columnA, table.columnB from table
-                    join tableB on (table.columnA = tableB.columnA)
-                    where table.columnA = \"1234\" and table.columnB > 1234",
+                input: "select tablea.columnA, tablea.columnB from tablea
+                    join tableB on (tablea.columnA = tableB.columnA)
+                    where tablea.columnA = \"1234\" and tablea.columnB > 1234",
                 want: vec![
                     Token::Select,
-                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columna".into()),
                     Token::Comma,
-                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::From,
-                    Token::TableOrColumnReference("table".into()),
+                    Token::TableOrColumnReference("tablea".into()),
                     Token::Join,
                     Token::TableOrColumnReference("tableb".into()),
                     Token::On,
                     Token::LParen,
-                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columna".into()),
                     Token::Eq,
                     Token::TableAndColumnReference("tableb".into(), "columna".into()),
                     Token::RParen,
                     Token::Where,
-                    Token::TableAndColumnReference("table".into(), "columna".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columna".into()),
                     Token::Eq,
                     Token::StringLiteral("1234".into()),
                     Token::Conjunction,
-                    Token::TableAndColumnReference("table".into(), "columnb".into()),
+                    Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::Gt,
                     Token::IntegerLiteral(1234),
                 ],
             },
             TestCase {
-                input: "insert into table (columnA, columnB, columnC, columnD) values (\"a\", 1, \"b\", 2)",
+                input: "insert into tablea (columnA, columnB, columnC, columnD) values (\"a\", 1, \"b\", 2)",
                 want: vec![
                     Token::Insert,
                     Token::Into,
-                    Token::TableOrColumnReference("table".into()),
+                    Token::TableOrColumnReference("tablea".into()),
                     Token::LParen,
                     Token::TableOrColumnReference("columna".into()),
                     Token::Comma,
@@ -394,6 +404,25 @@ mod test {
                     Token::Comma,
                     Token::IntegerLiteral(2),
                     Token::RParen,
+                ]
+            },
+            TestCase {
+                input: "create table tablea (
+                           columnA int,
+                           columnB int
+                           );",
+                want: vec![
+                    Token::Create,
+                    Token::Table,
+                    Token::TableOrColumnReference("tablea".into()),
+                    Token::LParen,
+                    Token::TableOrColumnReference("columna".into()),
+                    Token::Int,
+                    Token::Comma,
+                    Token::TableOrColumnReference("columnb".into()),
+                    Token::Int,
+                    Token::RParen,
+                    Token::Semicolon
                 ]
             }
         ];

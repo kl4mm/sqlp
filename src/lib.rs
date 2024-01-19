@@ -106,6 +106,46 @@ impl Into<Token> for &str {
     }
 }
 
+pub struct Lexer<'a> {
+    src: &'a str,
+    tkns: Vec<Token>,
+}
+
+impl<'a> Lexer<'a> {
+    pub fn new(src: &'a str) -> Self {
+        Self {
+            src,
+            tkns: Vec::new(),
+        }
+    }
+
+    pub fn next(&mut self) -> Option<&Token> {
+        if self.src.is_empty() {
+            return None;
+        }
+
+        while !self.src.is_empty() {
+            let s = chop(self.src);
+            if s.is_empty() {
+                self.src = &self.src[1..];
+                continue;
+            }
+
+            self.tkns.push(s.into());
+            self.src = &self.src[s.len()..];
+            break;
+        }
+
+        self.tkns.last()
+    }
+
+    pub fn to_vec(mut self) -> Vec<Token> {
+        while let Some(_) = self.next() {}
+
+        self.tkns
+    }
+}
+
 pub fn tokenise(mut src: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
 
@@ -228,7 +268,9 @@ fn chopc(src: &str) -> String {
 
 #[cfg(test)]
 mod test {
-    use super::{chop, tokenise, Token};
+    use crate::Lexer;
+
+    use super::{chop, Token};
 
     #[test]
     fn test_tokenise() {
@@ -428,7 +470,7 @@ mod test {
         ];
 
         for TestCase { input, want } in tcs {
-            let have = tokenise(input);
+            let have = Lexer::new(input).to_vec();
             assert!(want == have, "\nWant: {:?}\nHave: {:?}", want, have);
         }
     }

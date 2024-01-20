@@ -5,16 +5,10 @@ pub enum ColumnType {
     Int,
 }
 
-#[derive(PartialEq, Debug)]
-struct ColumnDef {
-    name: String,
-    t: ColumnType,
-}
-
 // TODO: look at rust AST in macro
 #[derive(PartialEq, Debug)]
 pub enum Node {
-    // Statements
+    /* Statements */
     CreateStatement {
         rel_name: String,
         col_defs: Vec<Node>, // Of ColumnDef
@@ -22,7 +16,7 @@ pub enum Node {
 
     SelectStatement {
         all: bool,
-        targets: Vec<Node>, // Of ResTarget
+        targets: Vec<Node>, // Of ColumnRef
 
         from_clause: Vec<Node>,
         where_clause: Box<Node>,
@@ -35,26 +29,21 @@ pub enum Node {
     DeleteStatement {},
     UpdateStatement {},
 
-    // Parse tree nodes
+    /* Parse tree nodes */
     ColumnDef {
         t: ColumnType,
         name: String,
-        var_size: u8,
-    },
-
-    // PGResTarget
-    ResTarget {
-        name: Option<String>, // Name of column if any
-        value: String,
+        var_size: Option<u8>,
     },
 
     ColumnRef {
-        table: Option<String>,
-        column: String,
+        alias: Option<String>,
+        family: Option<String>,
+        name: String,
     },
 
     TableRef {
-        table: String,
+        name: String,
     },
 
     Invalid,
@@ -284,7 +273,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                                             col_defs.push(Node::ColumnDef {
                                                 t: ColumnType::Int,
                                                 name: r,
-                                                var_size: 0,
+                                                var_size: None,
                                             });
                                             break 'adj;
                                         }
@@ -361,13 +350,14 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                         Token::TableOrColumnReference(r) => match (**n).tag {
                             GrammarTag::Targets => {
                                 targets.push(Node::ColumnRef {
-                                    table: None,
-                                    column: r,
+                                    alias: None,
+                                    family: None,
+                                    name: r,
                                 });
                                 break 'adj;
                             }
                             GrammarTag::Table => {
-                                from_clause.push(Node::TableRef { table: r });
+                                from_clause.push(Node::TableRef { name: r });
                                 break 'adj;
                             }
                             _ => unreachable!(),
@@ -375,8 +365,9 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
 
                         Token::TableAndColumnReference(t, c) => {
                             targets.push(Node::ColumnRef {
-                                table: Some(t),
-                                column: c,
+                                alias: None,
+                                family: Some(t),
+                                name: c,
                             });
                             break 'adj;
                         }
@@ -426,12 +417,12 @@ mod test {
                     Node::ColumnDef {
                         name: "columna".into(),
                         t: ColumnType::Int,
-                        var_size: 0,
+                        var_size: None,
                     },
                     Node::ColumnDef {
                         name: "columnb".into(),
                         t: ColumnType::Int,
-                        var_size: 0,
+                        var_size: None,
                     },
                 ],
             },
@@ -456,16 +447,18 @@ mod test {
                 all: false,
                 targets: vec![
                     Node::ColumnRef {
-                        table: None,
-                        column: "columna".into(),
+                        alias: None,
+                        family: None,
+                        name: "columna".into(),
                     },
                     Node::ColumnRef {
-                        table: Some("tablea".into()),
-                        column: "columna".into(),
+                        alias: None,
+                        family: Some("tablea".into()),
+                        name: "columna".into(),
                     },
                 ],
                 from_clause: vec![Node::TableRef {
-                    table: "tablea".into(),
+                    name: "tablea".into(),
                 }],
                 where_clause: Box::new(Node::Invalid),
                 group_clause: vec![],
@@ -527,16 +520,18 @@ mod old {
                     }
                     Token::TableOrColumnReference(r) => {
                         targets.push(Node::ColumnRef {
-                            table: None,
-                            column: r,
+                            alias: None,
+                            family: None,
+                            name: r,
                         });
 
                         state = State::ExpectComma;
                     }
                     Token::TableAndColumnReference(tr, cr) => {
                         targets.push(Node::ColumnRef {
-                            table: Some(tr),
-                            column: cr,
+                            alias: None,
+                            family: Some(tr),
+                            name: cr,
                         });
 
                         state = State::ExpectComma;
@@ -625,7 +620,7 @@ mod old {
                             Token::Int => col_defs.push(Node::ColumnDef {
                                 name: r,
                                 t: ColumnType::Int,
-                                var_size: 0,
+                                var_size: None,
                             }),
                             _ => Err(Error::UnexpectedToken)?,
                         }
@@ -675,12 +670,12 @@ mod old {
                     Node::ColumnDef {
                         name: "columna".into(),
                         t: ColumnType::Int,
-                        var_size: 0,
+                        var_size: None,
                     },
                     Node::ColumnDef {
                         name: "columnb".into(),
                         t: ColumnType::Int,
-                        var_size: 0,
+                        var_size: None,
                     },
                 ],
             },

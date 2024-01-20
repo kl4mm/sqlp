@@ -269,10 +269,8 @@ fn chop(src: &str) -> &str {
         }
 
         let q = check_str!(src, i, "\"");
-        if iq && q {
-            iq = false;
-        } else if !iq && q {
-            iq = true;
+        if q {
+            iq = !iq
         }
 
         i += 1

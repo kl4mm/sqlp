@@ -5,7 +5,6 @@ pub enum ColumnType {
     Int,
 }
 
-// TODO: look at rust AST in macro
 #[derive(PartialEq, Debug)]
 pub enum Node {
     /* Statements */
@@ -29,7 +28,7 @@ pub enum Node {
     DeleteStatement {},
     UpdateStatement {},
 
-    /* Parse tree nodes */
+    /* Parse nodes */
     ColumnDef {
         t: ColumnType,
         name: String,

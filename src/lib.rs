@@ -7,6 +7,8 @@ pub enum Token {
 
     Create,
     Table,
+
+    // Should be Type(<type>)
     Int,
 
     Select,

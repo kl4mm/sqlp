@@ -82,6 +82,7 @@ macro_rules! ptr {
 #[derive(Debug)]
 enum GrammarTag {
     Targets,
+    Defs,
     Table,
     None,
 }
@@ -94,6 +95,67 @@ struct GrammarNode {
 }
 
 impl GrammarNode {
+    pub fn create_stmt() -> *const Self {
+        static mut CREATE_STMT: *const GrammarNode = std::ptr::null_mut();
+
+        unsafe {
+            if !CREATE_STMT.is_null() {
+                return CREATE_STMT;
+            }
+
+            let end = ptr!(Self {
+                token: Token::RParen,
+                tag: GrammarTag::None,
+                adjacent: vec![ptr!(Self {
+                    token: Token::Semicolon,
+                    tag: GrammarTag::None,
+                    adjacent: vec![]
+                })],
+            });
+
+            // Cycle
+            let col_def = ptr!(Self {
+                token: Token::TableOrColumnReference(String::new()),
+                tag: GrammarTag::Defs,
+                adjacent: vec![ptr!(Self {
+                    token: Token::Int,
+                    tag: GrammarTag::None,
+                    adjacent: vec![
+                        ptr!(Self {
+                            token: Token::Comma,
+                            tag: GrammarTag::None,
+                            adjacent: vec![]
+                        }),
+                        end,
+                    ]
+                })]
+            });
+            (*(*(*col_def).adjacent[0]).adjacent[0])
+                .adjacent
+                .push(col_def);
+
+            CREATE_STMT = ptr!(Self {
+                token: Token::Create,
+                tag: GrammarTag::None,
+                adjacent: vec![ptr!(Self {
+                    token: Token::Table,
+                    tag: GrammarTag::None,
+                    adjacent: vec![ptr!(Self {
+                        token: Token::TableOrColumnReference(String::new()),
+                        tag: GrammarTag::Table,
+                        adjacent: vec![ptr!(Self {
+                            token: Token::LParen,
+                            tag: GrammarTag::None,
+                            adjacent: vec![col_def]
+                        })]
+                    })],
+                })],
+            });
+
+            CREATE_STMT
+        }
+    }
+
     pub fn select_stmt() -> *const Self {
         static mut SELECT_STMT: *const GrammarNode = std::ptr::null_mut();
 
@@ -104,49 +166,50 @@ impl GrammarNode {
 
             let end = ptr!(Self {
                 token: Token::Semicolon,
-                adjacent: vec![],
                 tag: GrammarTag::None,
+                adjacent: vec![],
             });
 
             let where_clause = ptr!(Self {
                 token: Token::Where,
-                adjacent: vec![],
                 tag: GrammarTag::None,
+                adjacent: vec![],
             });
 
             let from_clause = ptr!(Self {
                 token: Token::From,
+                tag: GrammarTag::None,
                 adjacent: vec![ptr!(GrammarNode {
                     token: Token::TableOrColumnReference(String::new()),
-                    adjacent: vec![where_clause, end],
                     tag: GrammarTag::Table,
+                    adjacent: vec![where_clause, end],
                 })],
-                tag: GrammarTag::None,
             });
 
             let col_refs_1 = ptr!(GrammarNode {
                 token: Token::TableOrColumnReference(String::new()),
-                adjacent: vec![from_clause],
                 tag: GrammarTag::Targets,
+                adjacent: vec![from_clause],
             });
 
             let col_refs_2 = ptr!(GrammarNode {
                 token: Token::TableAndColumnReference(String::new(), String::new()),
-                adjacent: vec![from_clause],
                 tag: GrammarTag::None,
+                adjacent: vec![from_clause],
             });
 
             // Cycle
             let comma = ptr!(GrammarNode {
                 token: Token::Comma,
-                adjacent: vec![col_refs_1, col_refs_2, from_clause],
                 tag: GrammarTag::None,
+                adjacent: vec![col_refs_1, col_refs_2, from_clause],
             });
             (*col_refs_1).adjacent.push(comma);
             (*col_refs_2).adjacent.push(comma);
 
             SELECT_STMT = ptr!(Self {
                 token: Token::Select,
+                tag: GrammarTag::None,
                 adjacent: vec![
                     ptr!(Self {
                         token: Token::All,
@@ -156,7 +219,6 @@ impl GrammarNode {
                     col_refs_1,
                     col_refs_2,
                 ],
-                tag: GrammarTag::None,
             });
 
             SELECT_STMT
@@ -164,12 +226,12 @@ impl GrammarNode {
     }
 }
 
-pub fn parse_stmt_g(l: &mut Lexer<'_>) -> Result<Node, Error> {
+pub fn parse_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
     let tkn = next_tkn!(l);
 
     Ok(match tkn {
-        Token::Create => todo!(),
-        Token::Select => parse_select_stmt_g(l)?,
+        Token::Create => parse_create_stmt(l)?,
+        Token::Select => parse_select_stmt(l)?,
         Token::Insert => todo!(),
         Token::Update => todo!(),
         Token::Delete => todo!(),
@@ -177,7 +239,87 @@ pub fn parse_stmt_g(l: &mut Lexer<'_>) -> Result<Node, Error> {
     })
 }
 
-fn parse_select_stmt_g(l: &mut Lexer<'_>) -> Result<Node, Error> {
+fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
+    let mut rel_name = String::new();
+    let mut col_defs = Vec::new();
+
+    unsafe {
+        let mut cur = GrammarNode::create_stmt();
+
+        loop {
+            let node = &(*cur);
+            if node.adjacent.is_empty() {
+                break;
+            }
+
+            let tkn = next_tkn!(l);
+            let mut m = false;
+            'adj: for n in &node.adjacent {
+                if tkn.teq(&(**n).token) {
+                    cur = *n;
+                    m = true;
+
+                    match tkn {
+                        Token::Table
+                        | Token::Create
+                        | Token::Comma
+                        | Token::LParen
+                        | Token::RParen
+                        | Token::Semicolon => break 'adj,
+
+                        Token::TableOrColumnReference(r) => {
+                            match (**n).tag {
+                                GrammarTag::Defs => {
+                                    // Look ahead for type
+                                    // Advance grammar cursor
+                                    let ntkn = next_tkn!(l);
+                                    cur = *(**n)
+                                        .adjacent
+                                        .iter()
+                                        .find(|&&x| (*x).token.teq(&Token::Int))
+                                        .expect("infallible");
+
+                                    match ntkn {
+                                        Token::Int => {
+                                            col_defs.push(Node::ColumnDef {
+                                                t: ColumnType::Int,
+                                                name: r,
+                                                var_size: 0,
+                                            });
+                                            break 'adj;
+                                        }
+                                        _ => Err(Error::UnexpectedToken)?,
+                                    }
+
+                                    // Why does the compiler think it can reach this?
+                                    unreachable!()
+                                }
+                                GrammarTag::Table => {
+                                    rel_name = r;
+                                    break 'adj;
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+
+                        // We look ahead to find the type so this shouldn't be expected here
+                        Token::Int => Err(Error::UnexpectedToken)?,
+
+                        _ => Err(Error::UnexpectedToken)?,
+                    }
+                }
+            }
+
+            if !m {
+                Err(Error::UnexpectedToken)?;
+            }
+        }
+    }
+
+    Ok(Node::CreateStatement { rel_name, col_defs })
+}
+
+fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
     let mut all = false;
     let mut targets = Vec::new();
     let mut from_clause = vec![];
@@ -262,41 +404,81 @@ fn parse_select_stmt_g(l: &mut Lexer<'_>) -> Result<Node, Error> {
     })
 }
 
-#[test]
-fn test_parse_select_stmt_g() {
-    struct TestCase {
-        input: &'static str,
-        want: Node,
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse_create_stmt() {
+        struct TestCase {
+            input: &'static str,
+            want: Node,
+        }
+
+        let tcs = [TestCase {
+            input: "create table tablea (
+                columna int,
+                columnb int
+            );",
+            want: Node::CreateStatement {
+                rel_name: "tablea".into(),
+                col_defs: vec![
+                    Node::ColumnDef {
+                        name: "columna".into(),
+                        t: ColumnType::Int,
+                        var_size: 0,
+                    },
+                    Node::ColumnDef {
+                        name: "columnb".into(),
+                        t: ColumnType::Int,
+                        var_size: 0,
+                    },
+                ],
+            },
+        }];
+
+        for TestCase { input, want } in tcs {
+            let have = parse_stmt(&mut Lexer::new(input)).unwrap();
+            assert!(want == have, "\nWant: {:?}\nHave: {:?}\n", want, have);
+        }
     }
 
-    let tcs = [TestCase {
-        input: "select columna, tablea.columna from tablea;",
-        want: Node::SelectStatement {
-            all: false,
-            targets: vec![
-                Node::ColumnRef {
-                    table: None,
-                    column: "columna".into(),
-                },
-                Node::ColumnRef {
-                    table: Some("tablea".into()),
-                    column: "columna".into(),
-                },
-            ],
-            from_clause: vec![Node::TableRef {
-                table: "tablea".into(),
-            }],
-            where_clause: Box::new(Node::Invalid),
-            group_clause: vec![],
-            sort_clause: vec![],
-            limit_count: Box::new(Node::Invalid),
-            limit_offset: Box::new(Node::Invalid),
-        },
-    }];
+    #[test]
+    fn test_parse_select_stmt() {
+        struct TestCase {
+            input: &'static str,
+            want: Node,
+        }
 
-    for TestCase { input, want } in tcs {
-        let have = parse_stmt_g(&mut Lexer::new(input)).unwrap();
-        assert!(want == have, "\nWant: {:?}\nHave: {:?}\n", want, have);
+        let tcs = [TestCase {
+            input: "select columna, tablea.columna from tablea;",
+            want: Node::SelectStatement {
+                all: false,
+                targets: vec![
+                    Node::ColumnRef {
+                        table: None,
+                        column: "columna".into(),
+                    },
+                    Node::ColumnRef {
+                        table: Some("tablea".into()),
+                        column: "columna".into(),
+                    },
+                ],
+                from_clause: vec![Node::TableRef {
+                    table: "tablea".into(),
+                }],
+                where_clause: Box::new(Node::Invalid),
+                group_clause: vec![],
+                sort_clause: vec![],
+                limit_count: Box::new(Node::Invalid),
+                limit_offset: Box::new(Node::Invalid),
+            },
+        }];
+
+        for TestCase { input, want } in tcs {
+            let have = parse_stmt(&mut Lexer::new(input)).unwrap();
+            assert!(want == have, "\nWant: {:?}\nHave: {:?}\n", want, have);
+        }
     }
 }
 

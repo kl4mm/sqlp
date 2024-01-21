@@ -30,6 +30,9 @@ pub enum Token {
     Semicolon,
     Comma,
     All,
+    In,
+    Between,
+    Is,
 
     Eq,
     Neq,
@@ -66,7 +69,10 @@ impl Token {
                 _ => false,
             },
 
-            t @ Token::LParen
+            t @ Token::Is
+            | t @ Token::Between
+            | t @ Token::In
+            | t @ Token::LParen
             | t @ Token::RParen
             | t @ Token::Create
             | t @ Token::Table
@@ -131,6 +137,9 @@ impl Into<Token> for &str {
             ";" => Token::Semicolon,
             "," => Token::Comma,
             "*" => Token::All,
+            "in" => Token::In,
+            "between" => Token::Between,
+            "is" => Token::Is,
 
             "=" => Token::Eq,
             "!=" => Token::Neq,

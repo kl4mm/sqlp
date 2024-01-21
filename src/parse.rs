@@ -1,6 +1,7 @@
-use std::vec;
-
-use crate::{Lexer, Token};
+use crate::{
+    grammar::{Node as Grammar, Tag},
+    next_tkn, Lexer, Token,
+};
 
 #[derive(PartialEq, Debug)]
 pub enum ColumnType {
@@ -57,394 +58,6 @@ pub enum Error {
     UnexpectedToken,
 }
 
-macro_rules! next_tkn {
-    ($lexer:expr) => {
-        $lexer.next().ok_or(Error::Invalid)?
-    };
-}
-
-macro_rules! ptr {
-    ($e:expr) => {
-        Box::into_raw(Box::new($e))
-    };
-}
-
-#[derive(Debug)]
-enum GrammarTag {
-    Targets,
-    Defs,
-    Table,
-    None,
-}
-
-#[derive(Debug)]
-struct GrammarNode {
-    token: Token,
-    tag: GrammarTag,
-    adjacent: Vec<*mut GrammarNode>,
-}
-
-impl GrammarNode {
-    pub fn create_stmt() -> *const Self {
-        static mut CREATE_STMT: *const GrammarNode = std::ptr::null_mut();
-
-        unsafe {
-            if !CREATE_STMT.is_null() {
-                return CREATE_STMT;
-            }
-
-            let end = ptr!(Self {
-                token: Token::RParen,
-                tag: GrammarTag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::Semicolon,
-                    tag: GrammarTag::None,
-                    adjacent: vec![]
-                })],
-            });
-
-            // Cycle
-            // <c> INT [,|);]
-            let col_def = ptr!(Self {
-                token: Token::TableOrColumnReference(String::new()),
-                tag: GrammarTag::Defs,
-                adjacent: vec![ptr!(Self {
-                    token: Token::Int,
-                    tag: GrammarTag::None,
-                    adjacent: vec![
-                        ptr!(Self {
-                            token: Token::Comma,
-                            tag: GrammarTag::None,
-                            adjacent: vec![]
-                        }),
-                        end,
-                    ]
-                })]
-            });
-            (*(*(*col_def).adjacent[0]).adjacent[0])
-                .adjacent
-                .push(col_def);
-
-            // CREATE TABLE <t> ( (col_def),* );
-            CREATE_STMT = ptr!(Self {
-                token: Token::Create,
-                tag: GrammarTag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::Table,
-                    tag: GrammarTag::None,
-                    adjacent: vec![ptr!(Self {
-                        token: Token::TableOrColumnReference(String::new()),
-                        tag: GrammarTag::Table,
-                        adjacent: vec![ptr!(Self {
-                            token: Token::LParen,
-                            tag: GrammarTag::None,
-                            adjacent: vec![col_def]
-                        })]
-                    })],
-                })],
-            });
-
-            CREATE_STMT
-        }
-    }
-
-    pub fn select_stmt() -> *const Self {
-        static mut SELECT_STMT: *const GrammarNode = std::ptr::null_mut();
-
-        unsafe {
-            if !SELECT_STMT.is_null() {
-                return SELECT_STMT;
-            }
-
-            let end = ptr!(Self {
-                token: Token::Semicolon,
-                tag: GrammarTag::None,
-                adjacent: vec![],
-            });
-
-            // TODO: vecs labeled 'Next clause' will have next token of either AND conditions, OR conditions,
-            // or next clause
-
-            // TODO: adjacent should probably be Rc lol
-            let rhs_operands = vec![
-                ptr!(Self {
-                    token: Token::TableAndColumnReference(String::new(), String::new()),
-                    tag: GrammarTag::None,
-                    adjacent: vec![] // Next clause
-                }),
-                ptr!(Self {
-                    token: Token::TableOrColumnReference(String::new()),
-                    tag: GrammarTag::None,
-                    adjacent: vec![] // Next clause
-                }),
-                ptr!(Self {
-                    token: Token::StringLiteral(String::new()),
-                    tag: GrammarTag::None,
-                    adjacent: vec![] // Next clause
-                }),
-                ptr!(Self {
-                    token: Token::IntegerLiteral(0),
-                    tag: GrammarTag::None,
-                    adjacent: vec![] // Next clause
-                }),
-            ];
-
-            let operators = vec![
-                ptr!(Self {
-                    token: Token::Eq,
-                    tag: GrammarTag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Neq,
-                    tag: GrammarTag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Gt,
-                    tag: GrammarTag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Ge,
-                    tag: GrammarTag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Lt,
-                    tag: GrammarTag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Le,
-                    tag: GrammarTag::None,
-                    adjacent: rhs_operands
-                }),
-            ];
-
-            let string_list = ptr!(Self {
-                token: Token::StringLiteral(String::new()),
-                tag: GrammarTag::None,
-                adjacent: vec![
-                    ptr!(Self {
-                        token: Token::Comma,
-                        tag: GrammarTag::None,
-                        adjacent: vec![], // Cycle
-                    }),
-                    ptr!(Self {
-                        token: Token::RParen,
-                        tag: GrammarTag::None,
-                        adjacent: vec![], // Next clause
-                    })
-                ],
-            });
-            (*(*string_list).adjacent[0]).adjacent.push(string_list);
-
-            let int_list = ptr!(Self {
-                token: Token::IntegerLiteral(0),
-                tag: GrammarTag::None,
-                adjacent: vec![
-                    ptr!(Self {
-                        token: Token::Comma,
-                        tag: GrammarTag::None,
-                        adjacent: vec![], // Cycle
-                    }),
-                    ptr!(Self {
-                        token: Token::RParen,
-                        tag: GrammarTag::None,
-                        adjacent: vec![], // Next clause
-                    })
-                ],
-            });
-            (*(*int_list).adjacent[0]).adjacent.push(int_list);
-
-            let in_expr = ptr!(Self {
-                token: Token::In,
-                tag: GrammarTag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::LParen,
-                    tag: GrammarTag::None,
-                    adjacent: vec![string_list, int_list]
-                })]
-            });
-
-            let between_expr = ptr!(Self {
-                token: Token::Between,
-                tag: GrammarTag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::IntegerLiteral(0),
-                    tag: GrammarTag::None,
-                    adjacent: vec![ptr!(Self {
-                        token: Token::Conjunction,
-                        tag: GrammarTag::None,
-                        adjacent: vec![ptr!(Self {
-                            token: Token::IntegerLiteral(0),
-                            tag: GrammarTag::None,
-                            adjacent: vec![] // Next clause
-                        })]
-                    })]
-                })]
-            });
-
-            let null = ptr!(Self {
-                token: Token::Null,
-                tag: GrammarTag::None,
-                adjacent: vec![] // Next clause
-            });
-            let is_expr = ptr!(Self {
-                token: Token::Is,
-                tag: GrammarTag::None,
-                adjacent: vec![
-                    null,
-                    ptr!(Self {
-                        token: Token::Negation,
-                        tag: GrammarTag::None,
-                        adjacent: vec![null]
-                    })
-                ]
-            });
-
-            let not_expr = ptr!(Self {
-                token: Token::Negation,
-                tag: GrammarTag::None,
-                adjacent: vec![in_expr, between_expr, is_expr]
-            });
-
-            // TODO: add support for summands and factors in future. keeping it simple for now
-            // TODO: add grammar for term (value, function, col_ref), which should also be used in
-            // place of col_refs. sticking to col_refs and literals for now
-            // [<t>.<c>|<c>|StringLiteral|IntegerLiteral]
-            let lhs_operands = vec![
-                ptr!(Self {
-                    token: Token::TableAndColumnReference(String::new(), String::new()),
-                    tag: GrammarTag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-                ptr!(Self {
-                    token: Token::TableOrColumnReference(String::new()),
-                    tag: GrammarTag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-                ptr!(Self {
-                    token: Token::StringLiteral(String::new()),
-                    tag: GrammarTag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-                ptr!(Self {
-                    token: Token::IntegerLiteral(0),
-                    tag: GrammarTag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-            ];
-
-            // lhs_operand [
-            //   [=|!=|>|>=|<|<=] rhs_operand
-            //   | [NOT|] IN ( (constOperand),* )
-            //   | [NOT|] BETWEEN IntegerLiteral AND IntegerLiteral
-            //   | IS [NOT|] NULL
-            // ]
-            // | NOT expr
-            // | ( expr )
-            let conditions = lhs_operands.into_iter().chain(vec![
-                ptr!(Self {
-                    token: Token::Negation,
-                    tag: GrammarTag::None,
-                    adjacent: vec![] // expr
-                }),
-                // ( expr )
-            ]);
-
-            // condition ([AND condition|OR condition|])*
-            let andCondition = ptr!(Self {
-                token: todo!(),
-                tag: GrammarTag::None,
-                adjacent: vec![],
-            });
-
-            // // andCondition ([OR andCondition|])*
-            // let expr = ptr!(Self {
-            //     token: todo!(),
-            //     tag: GrammarTag::None,
-            //     adjacent: vec![],
-            // });
-
-            // WHERE expr
-            let where_clause = ptr!(Self {
-                token: Token::Where,
-                tag: GrammarTag::None,
-                adjacent: conditions.collect(),
-            });
-
-            // FROM <t> [;|where_clause]
-            let from_clause = ptr!(Self {
-                token: Token::From,
-                tag: GrammarTag::None,
-                adjacent: vec![ptr!(GrammarNode {
-                    token: Token::TableOrColumnReference(String::new()),
-                    tag: GrammarTag::Table,
-                    adjacent: vec![where_clause, end],
-                })],
-            });
-
-            // <c> [,|from_clause]
-            let col_refs_1 = ptr!(GrammarNode {
-                token: Token::TableOrColumnReference(String::new()),
-                tag: GrammarTag::Targets,
-                adjacent: vec![from_clause],
-            });
-
-            // <t>.<c> [,|from_clause]
-            let col_refs_2 = ptr!(GrammarNode {
-                token: Token::TableAndColumnReference(String::new(), String::new()),
-                tag: GrammarTag::None,
-                adjacent: vec![from_clause],
-            });
-
-            // Cycle
-            let comma = ptr!(GrammarNode {
-                token: Token::Comma,
-                tag: GrammarTag::None,
-                adjacent: vec![col_refs_1, col_refs_2, from_clause],
-            });
-            (*col_refs_1).adjacent.push(comma);
-            (*col_refs_2).adjacent.push(comma);
-
-            // SELECT [*|(col_ref),*]
-            SELECT_STMT = ptr!(Self {
-                token: Token::Select,
-                tag: GrammarTag::None,
-                adjacent: vec![
-                    ptr!(Self {
-                        token: Token::All,
-                        adjacent: vec![from_clause],
-                        tag: GrammarTag::None,
-                    }),
-                    col_refs_1,
-                    col_refs_2,
-                ],
-            });
-
-            SELECT_STMT
-        }
-    }
-}
-
 pub fn parse_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
     let tkn = next_tkn!(l);
 
@@ -463,7 +76,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
     let mut col_defs = Vec::new();
 
     unsafe {
-        let mut cur = GrammarNode::create_stmt();
+        let mut cur = Grammar::create_stmt();
 
         loop {
             let node = &(*cur);
@@ -488,7 +101,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
 
                         Token::TableOrColumnReference(r) => {
                             match (**n).tag {
-                                GrammarTag::Defs => {
+                                Tag::Defs => {
                                     // Look ahead for type
                                     // Advance grammar cursor
                                     let ntkn = next_tkn!(l);
@@ -513,7 +126,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                                     // Why does the compiler think it can reach this?
                                     unreachable!()
                                 }
-                                GrammarTag::Table => {
+                                Tag::Table => {
                                     rel_name = r;
                                     break 'adj;
                                 }
@@ -549,7 +162,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
     let limit_offset = Box::new(Node::Invalid);
 
     unsafe {
-        let mut cur = GrammarNode::select_stmt();
+        let mut cur = Grammar::select_stmt();
 
         loop {
             let node = &(*cur);
@@ -578,7 +191,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                         }
 
                         Token::TableOrColumnReference(r) => match (**n).tag {
-                            GrammarTag::Targets => {
+                            Tag::Targets => {
                                 targets.push(Node::ColumnRef {
                                     alias: None,
                                     family: None,
@@ -586,7 +199,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                                 });
                                 break 'adj;
                             }
-                            GrammarTag::Table => {
+                            Tag::Table => {
                                 from_clause.push(Node::TableRef { name: r });
                                 break 'adj;
                             }

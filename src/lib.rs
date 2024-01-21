@@ -1,4 +1,12 @@
+pub mod grammar;
 pub mod parse;
+
+#[macro_export]
+macro_rules! next_tkn {
+    ($l:expr) => {
+        $l.next().ok_or(Error::Invalid)?
+    };
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Token {

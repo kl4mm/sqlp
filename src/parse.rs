@@ -102,6 +102,7 @@ impl GrammarNode {
             });
 
             // Cycle
+            // <c> INT [,|);]
             let col_def = ptr!(Self {
                 token: Token::TableOrColumnReference(String::new()),
                 tag: GrammarTag::Defs,
@@ -122,6 +123,7 @@ impl GrammarNode {
                 .adjacent
                 .push(col_def);
 
+            // CREATE TABLE <t> ( (col_def),* );
             CREATE_STMT = ptr!(Self {
                 token: Token::Create,
                 tag: GrammarTag::None,
@@ -164,6 +166,7 @@ impl GrammarNode {
                 adjacent: vec![],
             });
 
+            // FROM <t> [;|where_clause]
             let from_clause = ptr!(Self {
                 token: Token::From,
                 tag: GrammarTag::None,
@@ -174,12 +177,14 @@ impl GrammarNode {
                 })],
             });
 
+            // <c> [,|from_clause]
             let col_refs_1 = ptr!(GrammarNode {
                 token: Token::TableOrColumnReference(String::new()),
                 tag: GrammarTag::Targets,
                 adjacent: vec![from_clause],
             });
 
+            // <t>.<c> [,|from_clause]
             let col_refs_2 = ptr!(GrammarNode {
                 token: Token::TableAndColumnReference(String::new(), String::new()),
                 tag: GrammarTag::None,
@@ -195,6 +200,7 @@ impl GrammarNode {
             (*col_refs_1).adjacent.push(comma);
             (*col_refs_2).adjacent.push(comma);
 
+            // SELECT [*|(col_ref),*]
             SELECT_STMT = ptr!(Self {
                 token: Token::Select,
                 tag: GrammarTag::None,

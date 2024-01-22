@@ -140,7 +140,7 @@ impl Into<Token> for &str {
             "as" => Token::As,
             "and" => Token::Conjunction,
             "or" => Token::Disjunction,
-            "not" => Token::Disjunction,
+            "not" => Token::Negation,
             "null" => Token::Null,
             ";" => Token::Semicolon,
             "," => Token::Comma,

@@ -396,40 +396,50 @@ mod test {
 
     #[test]
     fn test_select_grammar() -> Result<(), Error> {
+        const ONLY: bool = false;
+
         struct TestCase {
             input: &'static str,
             matches: bool,
+            only: bool,
         }
 
         let tcs = [
             TestCase {
                 input: "* from tablea;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, * from tablea;",
                 matches: false,
+                only: false,
             },
             TestCase {
                 input: "*, columna from tablea;",
                 matches: false,
+                only: false,
             },
             TestCase {
                 input: "tablea.columna, columna from tablea;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea where columna > columnb;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input:
                     "columna, columnb from tablea where columna > columnb and columnc = columnd;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
@@ -437,41 +447,49 @@ mod test {
                     and columnc = columnd \
                     or columna > columnb;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
                     where not columna > columnb;",
-                matches: false, // FIXME
+                matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
                     where columna between 100 and 200;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
                     where columna not between 100 and 200;",
-                matches: false, // FIXME
+                matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
                     where columna in (1, 2, 3);",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
                     where columna not in (1, 2, 3);",
-                matches: false, // FIXME
+                matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
                     where columna is null;",
                 matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
                     where columna is not null;",
-                matches: false, // FIXME
+                matches: true,
+                only: false,
             },
             TestCase {
                 input: "columna, columnb from tablea \
@@ -479,10 +497,38 @@ mod test {
                     and columnc in (1, 2, 3) \
                     or columnd between 100 and 200;",
                 matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "columna, columnb from tablea \
+                    where not columna > columnb \
+                    and columnc not in (1, 2, 3) \
+                    or columnd not between 100 and 200;",
+                matches: true,
+                only: false,
+            },
+            // TODO: look at this later
+            TestCase {
+                input: "columna, columnb from tablea \
+                    where not not not columna > columnb \
+                    and columnc not in (1, 2, 3) \
+                    or columnd not between 100 and 200
+                    and columne is not null;",
+                matches: true,
+                only: false,
             },
         ];
 
-        for TestCase { input, matches } in tcs {
+        for TestCase {
+            input,
+            matches,
+            only,
+        } in tcs
+        {
+            if ONLY && !only {
+                continue;
+            }
+
             let mut l = Lexer::new(input);
             let mut cur = Node::select_stmt();
 

@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use crate::Token;
 
 macro_rules! ptr {
@@ -19,6 +21,278 @@ pub struct Node {
     pub token: Token,
     pub tag: Tag,
     pub adjacent: Vec<*mut Node>,
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum SToken {
+    RParen,
+    Semicolon,
+    Invalid,
+}
+#[derive(Copy, Clone)]
+pub enum STag {
+    None,
+}
+
+#[derive(Copy, Clone)]
+pub struct SNode {
+    pub token: SToken,
+    pub tag: STag,
+    pub adjacent: SArray,
+}
+
+macro_rules! array {
+    ($($e:expr),*) => {
+        {
+            #[allow(unused_mut)]
+            let mut a = SArray {
+                inner: [0; 32],
+                len: 0,
+            };
+
+            $(
+                a.push($e);
+            )*
+
+            a
+        }
+    };
+}
+
+#[derive(Copy, Clone)]
+pub struct SArray {
+    inner: [usize; 32],
+    len: usize,
+}
+
+pub struct Iter<'a> {
+    inner: &'a SArray,
+    i: usize,
+}
+
+impl Index<usize> for SArray {
+    type Output = usize;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.inner[index]
+    }
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.i >= self.inner.len() {
+            return None;
+        }
+
+        self.i += 1;
+        Some(self.inner[self.i - 1])
+    }
+}
+
+impl SArray {
+    pub fn push(&mut self, x: usize) {
+        self.inner[self.len] = x;
+        self.len += 1;
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn iter<'a>(&'a self) -> Iter<'a> {
+        Iter { inner: self, i: 0 }
+    }
+}
+
+static mut NODES_IDX: usize = 0;
+static mut NODES: [SNode; 128] = [SNode {
+    token: SToken::Invalid,
+    tag: STag::None,
+    adjacent: array!(),
+}; 128];
+
+macro_rules! node {
+    () => {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+            i
+    };
+    ($token:expr) => {
+        {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            i
+        }
+    };
+    ($token:expr =>) => {
+        {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            n.adjacent.push(i);
+
+            i
+        }
+    };
+    ($token:expr, [$($i:expr),*]) => {
+         {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+
+            $(
+                n.adjacent.push($i);
+            )*
+
+            i
+        }
+    };
+    ($token:expr, [$($i:expr),*] =>) => {
+         {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            n.adjacent.push(i);
+
+            $(
+                n.adjacent.push($i);
+            )*
+
+            i
+        }
+    };
+    ($token:expr, $tag:expr) => {
+        {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            n.tag = $tag;
+
+            i
+        }
+    };
+    ($token:expr, $tag:expr, [$($i:expr),*]) => {
+        {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            n.tag = $tag;
+
+            $(
+                n.adjacent.push($i)
+            )*
+
+            i
+        }
+    };
+}
+
+fn test() -> usize {
+    // )* ;
+    unsafe {
+        let end = node!(SToken::RParen, [node!(SToken::Semicolon)] =>);
+        end
+    }
+}
+
+#[test]
+fn test_new() {
+    struct TestCase {
+        input: &'static [SToken],
+        matches: bool,
+    }
+
+    let tcs = [
+        TestCase {
+            input: &[SToken::Semicolon],
+            matches: true,
+        },
+        TestCase {
+            input: &[SToken::RParen, SToken::Semicolon],
+            matches: true,
+        },
+        TestCase {
+            input: &[SToken::RParen, SToken::RParen, SToken::Semicolon],
+            matches: true,
+        },
+        TestCase {
+            input: &[
+                SToken::RParen,
+                SToken::RParen,
+                SToken::RParen,
+                SToken::RParen,
+                SToken::RParen,
+                SToken::RParen,
+                SToken::Semicolon,
+            ],
+            matches: true,
+        },
+        TestCase {
+            input: &[SToken::RParen, SToken::Invalid, SToken::Semicolon],
+            matches: false,
+        },
+    ];
+
+    for TestCase { input, matches } in tcs {
+        let mut l = input.into_iter();
+        let mut cur = test();
+
+        unsafe {
+            let mut m = false;
+            'l: loop {
+                let node = NODES[cur];
+                if node.adjacent.is_empty() {
+                    break 'l;
+                }
+
+                let tkn = l.next().unwrap();
+
+                m = false;
+                'adj: for n in node.adjacent.iter() {
+                    if *tkn == NODES[n].token {
+                        cur = n;
+                        m = true;
+                        break 'adj;
+                    };
+                }
+
+                if !m {
+                    break 'l;
+                }
+            }
+
+            if !m && !matches {
+                continue;
+            }
+
+            if !m && matches {
+                panic!("Expected input to match\ninput: {:?}", input);
+            }
+
+            if m && !matches {
+                panic!("Expected input to not match");
+            }
+        }
+    }
 }
 
 impl Node {

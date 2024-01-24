@@ -343,33 +343,19 @@ macro_rules! node {
             i
         }
     };
-    ($token:expr, $ns:ident, [$($i:expr),*]) => {
+    ($ns:ident $token:expr, [$($i:expr),*]) => {
          {
-            mod $ns {
-                use crate::grammar::NODES_IDX;
+            let $ns = NODES_IDX;
+            NODES_IDX += 1;
 
-                #[allow(unused)]
-                pub static mut I: usize = 0;
-                #[allow(unused)]
-                pub fn init() {
-                    unsafe {
-                        I = NODES_IDX;
-                        NODES_IDX += 1;
-                    }
-                }
-            }
-
-            $ns::init();
-            let i = $ns::I;
-
-            let n = &mut NODES[i];
+            let n = &mut NODES[$ns];
             n.token = $token;
 
             $(
                 n.adjacent.push($i);
             )*
 
-            i
+            $ns
         }
     };
     ($token:expr, $tag:expr) => {
@@ -400,23 +386,13 @@ macro_rules! node {
             i
         }
     };
-    ($token:expr, $tag:expr, $ns:ident, [$($i:expr),*]) => {
+    ($ns:ident $token:expr, $tag:expr, [$($i:expr),*]) => {
         {
-            mod $ns {
-                use crate::grammar::NODES_IDX;
-                pub static mut I: usize = 0;
-                pub fn init() {
-                    unsafe {
-                        I = NODES_IDX;
-                        NODES_IDX += 1;
-                    }
-                }
-            }
+            let $ns = NODES_IDX;
+            NODES_IDX += 1;
 
-            $ns::init();
-            let i = $ns::I;
+            let n = &mut NODES[$ns];
 
-            let n = &mut NODES[i];
             n.token = $token;
             n.tag = $tag;
 
@@ -424,7 +400,7 @@ macro_rules! node {
                 n.adjacent.push($i);
             )*
 
-            i
+            $ns
         }
     };
 }
@@ -432,7 +408,7 @@ macro_rules! node {
 fn test() -> usize {
     // )* ;
     unsafe {
-        let end = node!(State::RParen, e, [node!(State::Semicolon, []), e::I]);
+        let end = node!(end State::RParen, [node!(State::Semicolon, []), end]);
         end
     }
 }
@@ -562,13 +538,13 @@ impl Node {
                 .push(col_def);
 
             let col_def2 = node!(
+                col_def
                 State::TableOrColumnReference,
                 Tag::Defs,
-                cd,
                 [
                     node!(
                         State::Int,
-                        [node!(State::Comma, [cd::I])] /*TODO: need to introduce cycle inside comma node*/
+                        [node!(State::Comma, [col_def])] /*TODO: need to introduce cycle inside comma node*/
                     ),
                     end2
                 ]

@@ -328,6 +328,34 @@ macro_rules! node {
             i
         }
     };
+    ($token:expr, [[$a:ident]]) => {
+         {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            n.adjacent = $a;
+
+            i
+        }
+    };
+    ($token:expr, [[$a:ident]], [$($i:expr),*]) => {
+         {
+            let i = NODES_IDX;
+            NODES_IDX += 1;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            n.adjacent = $a;
+
+            $(
+                n.adjacent.push($i);
+            )*
+
+            i
+        }
+    };
     ($token:expr, [$($i:expr),*]) => {
          {
             let i = NODES_IDX;
@@ -444,6 +472,129 @@ impl Node {
 
             CREATE_STMT as usize
         }
+    }
+
+    pub fn select_stmt2() -> usize {
+        static mut SELECT_STMT: isize = -1;
+
+        unsafe {
+            if SELECT_STMT >= 0 {
+                return SELECT_STMT as usize;
+            }
+
+            let e = node!(State::Semicolon);
+
+            // [(AND condition)*|(OR condition)*|;]
+            let conn = array![node!(State::Conjunction), node!(State::Disjunction), e];
+
+            // [<t>.<c>|<c>|StringLiteral|IntegerLiteral] c
+            let rhs = array![
+                node!(State::TableAndColumnReference, [[conn]]),
+                node!(State::TableOrColumnReference, [[conn]]),
+                node!(State::StringLiteral, [[conn]]),
+                node!(State::IntegerLiteral, [[conn]])
+            ];
+
+            // StringLiteral [,*|)]
+            let sl = node!(sl State::StringLiteral, [
+                node!(State::Comma, [sl]), // Cycle
+                node!(State::RParen, [[conn]])
+            ]);
+
+            // IntegerLiteral [,*|)]
+            let il = node!(il State::IntegerLiteral, [
+                node!(State::Comma, [il]),
+                node!(State::RParen, [[conn]])
+            ]);
+
+            let inexpr = node!(State::In, [node!(State::LParen, [sl, il])]);
+
+            let btwexpr = node!(
+                State::Between,
+                [node!(
+                    State::IntegerLiteral,
+                    [node!(
+                        State::Conjunction,
+                        [node!(State::IntegerLiteral, [[conn]])]
+                    )]
+                )]
+            );
+
+            let null = node!(State::Null, [[conn]]);
+            let isexpr = node!(State::Is, [null, node!(State::Negation, [null])]);
+
+            let notexpr = node!(State::Negation, [inexpr, btwexpr, isexpr]);
+
+            // TODO: add support for summands and factors in future. keeping it simple for now
+            // TODO: add grammar for term (value, function, col_ref), which should also be used in
+            // place of col_refs. sticking to col_refs and literals for now
+            // lhs_operand = [<t>.<c>|<c>|StringLiteral|IntegerLiteral]
+            // lhs_operand [
+            //   [=|!=|>|>=|<|<=] rhs_operand
+            //   | [NOT|] IN ( (constOperand),* )
+            //   | [NOT|] BETWEEN IntegerLiteral AND IntegerLiteral
+            //   | IS [NOT|] NULL
+            // ]
+            // | NOT expr
+            let o = array![
+                node!(State::Eq, [[rhs]]),
+                node!(State::Neq, [[rhs]]),
+                node!(State::Gt, [[rhs]]),
+                node!(State::Ge, [[rhs]]),
+                node!(State::Lt, [[rhs]]),
+                node!(State::Le, [[rhs]])
+            ];
+
+            let c = array![
+                node!(
+                    State::TableAndColumnReference,
+                    [[o]],
+                    [notexpr, inexpr, btwexpr, isexpr]
+                ),
+                node!(
+                    State::TableOrColumnReference,
+                    [[o]],
+                    [notexpr, inexpr, btwexpr, isexpr]
+                ),
+                node!(
+                    State::StringLiteral,
+                    [[o]],
+                    [notexpr, inexpr, btwexpr, isexpr]
+                ),
+                node!(
+                    State::IntegerLiteral,
+                    [[o]],
+                    [notexpr, inexpr, btwexpr, isexpr]
+                )
+            ];
+
+            // NODES[conn[0]].adjacent.extend(c);
+            // NODES[conn[1]].adjacent.extend(c);
+
+            let f = node!(
+                State::From,
+                [node!(
+                    State::TableOrColumnReference,
+                    Tag::Table,
+                    [
+                        e,
+                        node!(State::Where, [[c]], [node!(State::Negation, [[c]])])
+                    ]
+                )]
+            );
+
+            // <c> [,|from_clause]
+            let cr1 = node!(State::TableOrColumnReference);
+            // <t>.<c> [,|from_clause]
+            let cr2 = node!(State::TableAndColumnReference);
+            let c = node!(State::Comma, [cr1, cr2]);
+            NODES[cr1].adjacent.push(c);
+            NODES[cr2].adjacent.push(c);
+
+            let s = node!(State::Select, [node!(State::All), cr1, cr2]);
+        }
+
+        todo!()
     }
 
     pub fn select_stmt() -> *const Self {

@@ -8,7 +8,7 @@ macro_rules! ptr {
     };
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Tag {
     Targets,
     Defs,
@@ -24,20 +24,215 @@ pub struct Node {
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub enum SToken {
+pub enum State {
+    LParen,
     RParen,
+
+    Create,
+    Table,
+
+    // Should be Type(<type>)
+    Int,
+
+    Select,
+    Insert,
+    Update,
+    Delete,
+    Into,
+    Values,
+    From,
+    Where,
+    Join,
+    On,
+    Using,
+    As,
+    Conjunction,
+    Disjunction,
+    Negation,
+    Null,
     Semicolon,
+    Comma,
+    All,
+    In,
+    Between,
+    Is,
+
+    Eq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+
+    StringLiteral,
+    IntegerLiteral,
+
+    TableAndColumnReference,
+    TableOrColumnReference,
+
     Invalid,
 }
-#[derive(Copy, Clone)]
-pub enum STag {
-    None,
+
+impl PartialEq<Token> for State {
+    fn eq(&self, other: &Token) -> bool {
+        match self {
+            State::LParen => match other {
+                Token::LParen => true,
+                _ => false,
+            },
+            State::RParen => match other {
+                Token::RParen => true,
+                _ => false,
+            },
+            State::Create => match other {
+                Token::Create => true,
+                _ => false,
+            },
+            State::Table => match other {
+                Token::Table => true,
+                _ => false,
+            },
+            State::Int => match other {
+                Token::Int => true,
+                _ => false,
+            },
+            State::Select => match other {
+                Token::Select => true,
+                _ => false,
+            },
+            State::Insert => match other {
+                Token::Insert => true,
+                _ => false,
+            },
+            State::Update => match other {
+                Token::Update => true,
+                _ => false,
+            },
+            State::Delete => match other {
+                Token::Delete => true,
+                _ => false,
+            },
+            State::Into => match other {
+                Token::Into => true,
+                _ => false,
+            },
+            State::Values => match other {
+                Token::Values => true,
+                _ => false,
+            },
+            State::From => match other {
+                Token::From => true,
+                _ => false,
+            },
+            State::Where => match other {
+                Token::Where => true,
+                _ => false,
+            },
+            State::Join => match other {
+                Token::Join => true,
+                _ => false,
+            },
+            State::On => match other {
+                Token::On => true,
+                _ => false,
+            },
+            State::Using => match other {
+                Token::Using => true,
+                _ => false,
+            },
+            State::As => match other {
+                Token::As => true,
+                _ => false,
+            },
+            State::Conjunction => match other {
+                Token::Conjunction => true,
+                _ => false,
+            },
+            State::Disjunction => match other {
+                Token::Disjunction => true,
+                _ => false,
+            },
+            State::Negation => match other {
+                Token::Negation => true,
+                _ => false,
+            },
+            State::Null => match other {
+                Token::Null => true,
+                _ => false,
+            },
+            State::Semicolon => match other {
+                Token::Semicolon => true,
+                _ => false,
+            },
+            State::Comma => match other {
+                Token::Comma => true,
+                _ => false,
+            },
+            State::All => match other {
+                Token::All => true,
+                _ => false,
+            },
+            State::In => match other {
+                Token::In => true,
+                _ => false,
+            },
+            State::Between => match other {
+                Token::Between => true,
+                _ => false,
+            },
+            State::Is => match other {
+                Token::Is => true,
+                _ => false,
+            },
+            State::Eq => match other {
+                Token::Eq => true,
+                _ => false,
+            },
+            State::Neq => match other {
+                Token::Neq => true,
+                _ => false,
+            },
+            State::Lt => match other {
+                Token::Lt => true,
+                _ => false,
+            },
+            State::Le => match other {
+                Token::Le => true,
+                _ => false,
+            },
+            State::Gt => match other {
+                Token::Gt => true,
+                _ => false,
+            },
+            State::Ge => match other {
+                Token::Ge => true,
+                _ => false,
+            },
+            State::StringLiteral => match other {
+                Token::StringLiteral(_) => true,
+                _ => false,
+            },
+            State::IntegerLiteral => match other {
+                Token::IntegerLiteral(_) => true,
+                _ => false,
+            },
+            State::TableAndColumnReference => match other {
+                Token::TableAndColumnReference(_, _) => true,
+                _ => false,
+            },
+            State::TableOrColumnReference => match other {
+                Token::TableOrColumnReference(_) => true,
+                _ => false,
+            },
+            State::Invalid => false,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
 pub struct SNode {
-    pub token: SToken,
-    pub tag: STag,
+    pub token: State,
+    pub tag: Tag,
     pub adjacent: SArray,
 }
 
@@ -112,8 +307,8 @@ impl SArray {
 
 static mut NODES_IDX: usize = 0;
 static mut NODES: [SNode; 128] = [SNode {
-    token: SToken::Invalid,
-    tag: STag::None,
+    token: State::Invalid,
+    tag: Tag::None,
     adjacent: array!(),
 }; 128];
 
@@ -133,18 +328,6 @@ macro_rules! node {
             i
         }
     };
-    ($token:expr =>) => {
-        {
-            let i = NODES_IDX;
-            NODES_IDX += 1;
-
-            let n = &mut NODES[i];
-            n.token = $token;
-            n.adjacent.push(i);
-
-            i
-        }
-    };
     ($token:expr, [$($i:expr),*]) => {
          {
             let i = NODES_IDX;
@@ -160,14 +343,27 @@ macro_rules! node {
             i
         }
     };
-    ($token:expr, [$($i:expr),*] =>) => {
+    ($token:expr, $ns:ident, [$($i:expr),*]) => {
          {
-            let i = NODES_IDX;
-            NODES_IDX += 1;
+            mod $ns {
+                use crate::grammar::NODES_IDX;
+
+                #[allow(unused)]
+                pub static mut I: usize = 0;
+                #[allow(unused)]
+                pub fn init() {
+                    unsafe {
+                        I = NODES_IDX;
+                        NODES_IDX += 1;
+                    }
+                }
+            }
+
+            $ns::init();
+            let i = $ns::I;
 
             let n = &mut NODES[i];
             n.token = $token;
-            n.adjacent.push(i);
 
             $(
                 n.adjacent.push($i);
@@ -198,7 +394,34 @@ macro_rules! node {
             n.tag = $tag;
 
             $(
-                n.adjacent.push($i)
+                n.adjacent.push($i);
+            )*
+
+            i
+        }
+    };
+    ($token:expr, $tag:expr, $ns:ident, [$($i:expr),*]) => {
+        {
+            mod $ns {
+                use crate::grammar::NODES_IDX;
+                pub static mut I: usize = 0;
+                pub fn init() {
+                    unsafe {
+                        I = NODES_IDX;
+                        NODES_IDX += 1;
+                    }
+                }
+            }
+
+            $ns::init();
+            let i = $ns::I;
+
+            let n = &mut NODES[i];
+            n.token = $token;
+            n.tag = $tag;
+
+            $(
+                n.adjacent.push($i);
             )*
 
             i
@@ -209,7 +432,7 @@ macro_rules! node {
 fn test() -> usize {
     // )* ;
     unsafe {
-        let end = node!(SToken::RParen, [node!(SToken::Semicolon)] =>);
+        let end = node!(State::RParen, e, [node!(State::Semicolon, []), e::I]);
         end
     }
 }
@@ -217,37 +440,37 @@ fn test() -> usize {
 #[test]
 fn test_new() {
     struct TestCase {
-        input: &'static [SToken],
+        input: &'static [State],
         matches: bool,
     }
 
     let tcs = [
         TestCase {
-            input: &[SToken::Semicolon],
+            input: &[State::Semicolon],
             matches: true,
         },
         TestCase {
-            input: &[SToken::RParen, SToken::Semicolon],
+            input: &[State::RParen, State::Semicolon],
             matches: true,
         },
         TestCase {
-            input: &[SToken::RParen, SToken::RParen, SToken::Semicolon],
+            input: &[State::RParen, State::RParen, State::Semicolon],
             matches: true,
         },
         TestCase {
             input: &[
-                SToken::RParen,
-                SToken::RParen,
-                SToken::RParen,
-                SToken::RParen,
-                SToken::RParen,
-                SToken::RParen,
-                SToken::Semicolon,
+                State::RParen,
+                State::RParen,
+                State::RParen,
+                State::RParen,
+                State::RParen,
+                State::RParen,
+                State::Semicolon,
             ],
             matches: true,
         },
         TestCase {
-            input: &[SToken::RParen, SToken::Invalid, SToken::Semicolon],
+            input: &[State::RParen, State::Invalid, State::Semicolon],
             matches: false,
         },
     ];
@@ -304,6 +527,8 @@ impl Node {
                 return CREATE_STMT;
             }
 
+            let end2 = node!(State::RParen, [node!(State::Semicolon)]);
+
             let end = ptr!(Self {
                 token: Token::RParen,
                 tag: Tag::None,
@@ -336,6 +561,22 @@ impl Node {
                 .adjacent
                 .push(col_def);
 
+            let col_def2 = node!(
+                State::TableOrColumnReference,
+                Tag::Defs,
+                cd,
+                [
+                    node!(
+                        State::Int,
+                        [node!(State::Comma, [cd::I])] /*TODO: need to introduce cycle inside comma node*/
+                    ),
+                    end2
+                ]
+            );
+            // NODES[NODES[NODES[col_def2].adjacent[0]].adjacent[0]]
+            //     .adjacent
+            //     .push(col_def2);
+
             // CREATE TABLE <t> ( (col_def),* );
             CREATE_STMT = ptr!(Self {
                 token: Token::Create,
@@ -354,6 +595,17 @@ impl Node {
                     })],
                 })],
             });
+
+            let create_stmt = node!(
+                State::Create,
+                [node!(
+                    State::Table,
+                    [node!(
+                        State::TableOrColumnReference,
+                        [node!(State::LParen, [col_def2])]
+                    )]
+                )]
+            );
 
             CREATE_STMT
         }

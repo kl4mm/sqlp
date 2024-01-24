@@ -306,7 +306,7 @@ impl SArray {
 }
 
 static mut NODES_IDX: usize = 0;
-static mut NODES: [SNode; 128] = [SNode {
+pub static mut NODES: [SNode; 128] = [SNode {
     token: State::Invalid,
     tag: Tag::None,
     adjacent: array!(),
@@ -405,185 +405,44 @@ macro_rules! node {
     };
 }
 
-fn test() -> usize {
-    // )* ;
-    unsafe {
-        let end = node!(end State::RParen, [node!(State::Semicolon, []), end]);
-        end
-    }
-}
-
-#[test]
-fn test_new() {
-    struct TestCase {
-        input: &'static [State],
-        matches: bool,
-    }
-
-    let tcs = [
-        TestCase {
-            input: &[State::Semicolon],
-            matches: true,
-        },
-        TestCase {
-            input: &[State::RParen, State::Semicolon],
-            matches: true,
-        },
-        TestCase {
-            input: &[State::RParen, State::RParen, State::Semicolon],
-            matches: true,
-        },
-        TestCase {
-            input: &[
-                State::RParen,
-                State::RParen,
-                State::RParen,
-                State::RParen,
-                State::RParen,
-                State::RParen,
-                State::Semicolon,
-            ],
-            matches: true,
-        },
-        TestCase {
-            input: &[State::RParen, State::Invalid, State::Semicolon],
-            matches: false,
-        },
-    ];
-
-    for TestCase { input, matches } in tcs {
-        let mut l = input.into_iter();
-        let mut cur = test();
-
-        unsafe {
-            let mut m = false;
-            'l: loop {
-                let node = NODES[cur];
-                if node.adjacent.is_empty() {
-                    break 'l;
-                }
-
-                let tkn = l.next().unwrap();
-
-                m = false;
-                'adj: for n in node.adjacent.iter() {
-                    if *tkn == NODES[n].token {
-                        cur = n;
-                        m = true;
-                        break 'adj;
-                    };
-                }
-
-                if !m {
-                    break 'l;
-                }
-            }
-
-            if !m && !matches {
-                continue;
-            }
-
-            if !m && matches {
-                panic!("Expected input to match\ninput: {:?}", input);
-            }
-
-            if m && !matches {
-                panic!("Expected input to not match");
-            }
-        }
-    }
-}
-
 impl Node {
-    pub fn create_stmt() -> *const Self {
-        static mut CREATE_STMT: *const Node = std::ptr::null_mut();
+    pub fn create_stmt() -> usize {
+        static mut CREATE_STMT: isize = -1;
 
         unsafe {
-            if !CREATE_STMT.is_null() {
-                return CREATE_STMT;
+            if CREATE_STMT >= 0 {
+                return CREATE_STMT as usize;
             }
 
-            let end2 = node!(State::RParen, [node!(State::Semicolon)]);
-
-            let end = ptr!(Self {
-                token: Token::RParen,
-                tag: Tag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::Semicolon,
-                    tag: Tag::None,
-                    adjacent: vec![]
-                })],
-            });
-
-            // Cycle
-            // <c> INT [,|);]
-            let col_def = ptr!(Self {
-                token: Token::TableOrColumnReference(String::new()),
-                tag: Tag::Defs,
-                adjacent: vec![ptr!(Self {
-                    token: Token::Int,
-                    tag: Tag::None,
-                    adjacent: vec![
-                        ptr!(Self {
-                            token: Token::Comma,
-                            tag: Tag::None,
-                            adjacent: vec![]
-                        }),
-                        end,
-                    ]
-                })]
-            });
-            (*(*(*col_def).adjacent[0]).adjacent[0])
-                .adjacent
-                .push(col_def);
-
-            let col_def2 = node!(
-                col_def
-                State::TableOrColumnReference,
-                Tag::Defs,
-                [
-                    node!(
-                        State::Int,
-                        [node!(State::Comma, [col_def])] /*TODO: need to introduce cycle inside comma node*/
-                    ),
-                    end2
-                ]
-            );
-            // NODES[NODES[NODES[col_def2].adjacent[0]].adjacent[0]]
-            //     .adjacent
-            //     .push(col_def2);
-
-            // CREATE TABLE <t> ( (col_def),* );
-            CREATE_STMT = ptr!(Self {
-                token: Token::Create,
-                tag: Tag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::Table,
-                    tag: Tag::None,
-                    adjacent: vec![ptr!(Self {
-                        token: Token::TableOrColumnReference(String::new()),
-                        tag: Tag::Table,
-                        adjacent: vec![ptr!(Self {
-                            token: Token::LParen,
-                            tag: Tag::None,
-                            adjacent: vec![col_def]
-                        })]
-                    })],
-                })],
-            });
-
-            let create_stmt = node!(
+            CREATE_STMT = node!(
                 State::Create,
                 [node!(
                     State::Table,
                     [node!(
                         State::TableOrColumnReference,
-                        [node!(State::LParen, [col_def2])]
+                        Tag::Table,
+                        [node!(
+                            State::LParen,
+                            [node!(
+                                col_def
+                                State::TableOrColumnReference,
+                                Tag::Defs,
+                                [
+                                    node!(
+                                        State::Int,
+                                        [
+                                            node!(State::Comma, [col_def]), // Cycle
+                                            node!(State::RParen, [node!(State::Semicolon)])
+                                        ]
+                                    )
+                                ]
+                            )]
+                        )]
                     )]
                 )]
-            );
+            ) as isize;
 
-            CREATE_STMT
+            CREATE_STMT as usize
         }
     }
 
@@ -1064,6 +923,83 @@ mod test {
 
                 if !m && matches {
                     panic!("Expected input to match");
+                }
+
+                if m && !matches {
+                    panic!("Expected input to not match");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_grammar() -> Result<(), Error> {
+        struct TestCase {
+            input: &'static str,
+            matches: bool,
+        }
+
+        let tcs = [
+            TestCase {
+                input: "create table tablea (
+                       columna int
+                    );",
+                matches: true,
+            },
+            TestCase {
+                input: "create table tablea (
+                       columna int,
+                       columnb int
+                    );",
+                matches: true,
+            },
+            TestCase {
+                input: "create table tablea (
+                       columna int,
+                       columnb int,
+                    );",
+                matches: false,
+            },
+        ];
+
+        for TestCase { input, matches } in tcs {
+            let mut l = Lexer::new(input);
+            let mut cur = Node::create_stmt();
+
+            assert!(next_tkn!(l) == Token::Create);
+
+            unsafe {
+                let mut m = false;
+                'l: loop {
+                    let node = NODES[cur];
+                    if node.adjacent.is_empty() {
+                        break 'l;
+                    }
+
+                    let tkn = l.next().unwrap();
+
+                    m = false;
+                    'adj: for n in node.adjacent.iter() {
+                        if NODES[n].token == tkn {
+                            cur = n;
+                            m = true;
+                            break 'adj;
+                        };
+                    }
+
+                    if !m {
+                        break 'l;
+                    }
+                }
+
+                if !m && !matches {
+                    continue;
+                }
+
+                if !m && matches {
+                    panic!("Expected input to match\ninput: {:?}", input);
                 }
 
                 if m && !matches {

@@ -1,5 +1,5 @@
 use crate::{
-    grammar::{Node as Grammar, Tag},
+    grammar::{self, Node as Grammar, Tag},
     next_tkn, Lexer, Token,
 };
 
@@ -79,17 +79,19 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
         let mut cur = Grammar::create_stmt();
 
         loop {
-            let node = &(*cur);
+            let node = grammar::NODES[cur];
             if node.adjacent.is_empty() {
                 break;
             }
 
             let tkn = next_tkn!(l);
             let mut m = false;
-            'adj: for n in &node.adjacent {
-                if tkn.teq(&(**n).token) {
-                    cur = *n;
+            'adj: for n in node.adjacent.iter() {
+                if grammar::NODES[n].token == tkn {
+                    cur = n;
                     m = true;
+
+                    let node = grammar::NODES[n];
 
                     match tkn {
                         Token::Table
@@ -100,15 +102,15 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                         | Token::Semicolon => break 'adj,
 
                         Token::TableOrColumnReference(r) => {
-                            match (**n).tag {
+                            match node.tag {
                                 Tag::Defs => {
                                     // Look ahead for type
                                     // Advance grammar cursor
                                     let ntkn = next_tkn!(l);
-                                    cur = *(**n)
+                                    cur = node
                                         .adjacent
                                         .iter()
-                                        .find(|&&x| (*x).token.teq(&Token::Int))
+                                        .find(|&j| grammar::NODES[j].token == Token::Int)
                                         .expect("infallible");
 
                                     match ntkn {

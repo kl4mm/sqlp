@@ -265,11 +265,39 @@ pub struct Iter<'a> {
     i: usize,
 }
 
+pub struct IntoIter {
+    inner: SArray,
+    i: usize,
+}
+
+impl Iterator for IntoIter {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.i >= self.inner.len() {
+            return None;
+        }
+
+        self.i += 1;
+        Some(self.inner[self.i - 1])
+    }
+}
+
 impl Index<usize> for SArray {
     type Output = usize;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.inner[index]
+    }
+}
+
+impl IntoIterator for SArray {
+    type Item = usize;
+
+    type IntoIter = IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter { inner: self, i: 0 }
     }
 }
 
@@ -283,6 +311,14 @@ impl<'a> Iterator for Iter<'a> {
 
         self.i += 1;
         Some(self.inner[self.i - 1])
+    }
+}
+
+impl Extend<usize> for SArray {
+    fn extend<T: IntoIterator<Item = usize>>(&mut self, iter: T) {
+        for i in iter {
+            self.push(i);
+        }
     }
 }
 
@@ -507,8 +543,10 @@ impl Node {
                 node!(State::RParen, [[conn]])
             ]);
 
+            // IN ([string_list|int_list])
             let inexpr = node!(State::In, [node!(State::LParen, [sl, il])]);
 
+            // BETWEEN IntegerLiteral AND IntegerLiteral
             let btwexpr = node!(
                 State::Between,
                 [node!(
@@ -521,9 +559,21 @@ impl Node {
             );
 
             let null = node!(State::Null, [[conn]]);
+
+            // IS [NOT|] NULL
             let isexpr = node!(State::Is, [null, node!(State::Negation, [null])]);
 
+            // NOT [inexpr|btwexpr|isexpr]
             let notexpr = node!(State::Negation, [inexpr, btwexpr, isexpr]);
+
+            let o = array![
+                node!(State::Eq, [[rhs]]),
+                node!(State::Neq, [[rhs]]),
+                node!(State::Gt, [[rhs]]),
+                node!(State::Ge, [[rhs]]),
+                node!(State::Lt, [[rhs]]),
+                node!(State::Le, [[rhs]])
+            ];
 
             // TODO: add support for summands and factors in future. keeping it simple for now
             // TODO: add grammar for term (value, function, col_ref), which should also be used in
@@ -536,16 +586,7 @@ impl Node {
             //   | IS [NOT|] NULL
             // ]
             // | NOT expr
-            let o = array![
-                node!(State::Eq, [[rhs]]),
-                node!(State::Neq, [[rhs]]),
-                node!(State::Gt, [[rhs]]),
-                node!(State::Ge, [[rhs]]),
-                node!(State::Lt, [[rhs]]),
-                node!(State::Le, [[rhs]])
-            ];
-
-            let c = array![
+            let cond = array![
                 node!(
                     State::TableAndColumnReference,
                     [[o]],
@@ -565,11 +606,15 @@ impl Node {
                     State::IntegerLiteral,
                     [[o]],
                     [notexpr, inexpr, btwexpr, isexpr]
-                )
+                ),
+                node!(State::Negation)
             ];
+            // Would this need to be inside c?
+            // c.push(node!(State::Negation, [[c]]));
 
-            // NODES[conn[0]].adjacent.extend(c);
-            // NODES[conn[1]].adjacent.extend(c);
+            NODES[conn[0]].adjacent.extend(cond);
+            NODES[conn[1]].adjacent.extend(cond);
+            NODES[cond[4]].adjacent.extend(cond);
 
             let f = node!(
                 State::From,
@@ -578,324 +623,21 @@ impl Node {
                     Tag::Table,
                     [
                         e,
-                        node!(State::Where, [[c]], [node!(State::Negation, [[c]])])
+                        node!(State::Where, [[cond]], [node!(State::Negation, [[cond]])])
                     ]
                 )]
             );
 
-            // <c> [,|from_clause]
-            let cr1 = node!(State::TableOrColumnReference);
-            // <t>.<c> [,|from_clause]
-            let cr2 = node!(State::TableAndColumnReference);
+            // [<c>|<t>.<c>] [,|from_clause]
+            let cr1 = node!(State::TableOrColumnReference, [f]);
+            let cr2 = node!(State::TableAndColumnReference, [f]);
             let c = node!(State::Comma, [cr1, cr2]);
             NODES[cr1].adjacent.push(c);
             NODES[cr2].adjacent.push(c);
 
-            let s = node!(State::Select, [node!(State::All), cr1, cr2]);
-        }
+            SELECT_STMT = node!(State::Select, [node!(State::All, [f]), cr1, cr2]) as isize;
 
-        todo!()
-    }
-
-    pub fn select_stmt() -> *const Self {
-        static mut SELECT_STMT: *const Node = std::ptr::null_mut();
-
-        unsafe {
-            if !SELECT_STMT.is_null() {
-                return SELECT_STMT;
-            }
-
-            let end = ptr!(Self {
-                token: Token::Semicolon,
-                tag: Tag::None,
-                adjacent: vec![],
-            });
-
-            // [(AND condition)*|(OR condition)*|;]
-            let mut connector = vec![
-                ptr!(Self {
-                    token: Token::Conjunction,
-                    tag: Tag::None,
-                    adjacent: vec![] // conditions
-                }),
-                ptr!(Self {
-                    token: Token::Disjunction,
-                    tag: Tag::None,
-                    adjacent: vec![] // conditions
-                }),
-                end,
-                // TODO: Next clause
-            ];
-
-            // [<t>.<c>|<c>|StringLiteral|IntegerLiteral] connector
-            let rhs_operands = vec![
-                ptr!(Self {
-                    token: Token::TableAndColumnReference(String::new(), String::new()),
-                    tag: Tag::None,
-                    adjacent: connector.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::TableOrColumnReference(String::new()),
-                    tag: Tag::None,
-                    adjacent: connector.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::StringLiteral(String::new()),
-                    tag: Tag::None,
-                    adjacent: connector.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::IntegerLiteral(0),
-                    tag: Tag::None,
-                    adjacent: connector.clone(),
-                }),
-            ];
-
-            // [=|!=|>|>=|<|<=]
-            let operators = vec![
-                ptr!(Self {
-                    token: Token::Eq,
-                    tag: Tag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Neq,
-                    tag: Tag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Gt,
-                    tag: Tag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Ge,
-                    tag: Tag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Lt,
-                    tag: Tag::None,
-                    adjacent: rhs_operands.clone(),
-                }),
-                ptr!(Self {
-                    token: Token::Le,
-                    tag: Tag::None,
-                    adjacent: rhs_operands
-                }),
-            ];
-
-            // StringLiteral [,*|)]
-            let string_list = ptr!(Self {
-                token: Token::StringLiteral(String::new()),
-                tag: Tag::None,
-                adjacent: vec![
-                    ptr!(Self {
-                        token: Token::Comma,
-                        tag: Tag::None,
-                        adjacent: vec![], // Cycle
-                    }),
-                    ptr!(Self {
-                        token: Token::RParen,
-                        tag: Tag::None,
-                        adjacent: connector.clone(),
-                    })
-                ],
-            });
-            (*(*string_list).adjacent[0]).adjacent.push(string_list);
-
-            // IntegerLiteral [,*|)]
-            let int_list = ptr!(Self {
-                token: Token::IntegerLiteral(0),
-                tag: Tag::None,
-                adjacent: vec![
-                    ptr!(Self {
-                        token: Token::Comma,
-                        tag: Tag::None,
-                        adjacent: vec![], // Cycle
-                    }),
-                    ptr!(Self {
-                        token: Token::RParen,
-                        tag: Tag::None,
-                        adjacent: connector.clone(),
-                    })
-                ],
-            });
-            (*(*int_list).adjacent[0]).adjacent.push(int_list);
-
-            // IN ([string_list|int_list])
-            let in_expr = ptr!(Self {
-                token: Token::In,
-                tag: Tag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::LParen,
-                    tag: Tag::None,
-                    adjacent: vec![string_list, int_list]
-                })]
-            });
-
-            let between_expr = ptr!(Self {
-                token: Token::Between,
-                tag: Tag::None,
-                adjacent: vec![ptr!(Self {
-                    token: Token::IntegerLiteral(0),
-                    tag: Tag::None,
-                    adjacent: vec![ptr!(Self {
-                        token: Token::Conjunction,
-                        tag: Tag::None,
-                        adjacent: vec![ptr!(Self {
-                            token: Token::IntegerLiteral(0),
-                            tag: Tag::None,
-                            adjacent: connector.clone()
-                        })]
-                    })]
-                })]
-            });
-
-            let null = ptr!(Self {
-                token: Token::Null,
-                tag: Tag::None,
-                adjacent: connector.clone()
-            });
-            let is_expr = ptr!(Self {
-                token: Token::Is,
-                tag: Tag::None,
-                adjacent: vec![
-                    null,
-                    ptr!(Self {
-                        token: Token::Negation,
-                        tag: Tag::None,
-                        adjacent: vec![null]
-                    })
-                ]
-            });
-
-            let not_expr = ptr!(Self {
-                token: Token::Negation,
-                tag: Tag::None,
-                adjacent: vec![in_expr, between_expr, is_expr]
-            });
-
-            // TODO: add support for summands and factors in future. keeping it simple for now
-            // TODO: add grammar for term (value, function, col_ref), which should also be used in
-            // place of col_refs. sticking to col_refs and literals for now
-            // lhs_operand = [<t>.<c>|<c>|StringLiteral|IntegerLiteral]
-            // lhs_operand [
-            //   [=|!=|>|>=|<|<=] rhs_operand
-            //   | [NOT|] IN ( (constOperand),* )
-            //   | [NOT|] BETWEEN IntegerLiteral AND IntegerLiteral
-            //   | IS [NOT|] NULL
-            // ]
-            // | NOT expr
-            let mut condition = vec![
-                // LHS operands
-                ptr!(Self {
-                    token: Token::TableAndColumnReference(String::new(), String::new()),
-                    tag: Tag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-                ptr!(Self {
-                    token: Token::TableOrColumnReference(String::new()),
-                    tag: Tag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-                ptr!(Self {
-                    token: Token::StringLiteral(String::new()),
-                    tag: Tag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-                ptr!(Self {
-                    token: Token::IntegerLiteral(0),
-                    tag: Tag::None,
-                    adjacent: operators
-                        .clone()
-                        .into_iter()
-                        .chain(vec![not_expr, in_expr, between_expr, is_expr])
-                        .collect(),
-                }),
-                // NOT expression
-                ptr!(Self {
-                    token: Token::Negation,
-                    tag: Tag::None,
-                    adjacent: vec![] // Cycle
-                }),
-            ];
-
-            // Connector cycles
-            (*connector[0]).adjacent.extend(condition.clone());
-            (*connector[1]).adjacent.extend(condition.clone());
-            // NOT expression (probably can't have more than one in a query)
-            (*condition[4]).adjacent.extend(condition.clone());
-
-            // WHERE condition
-            let where_clause = ptr!(Self {
-                token: Token::Where,
-                tag: Tag::None,
-                adjacent: condition,
-            });
-
-            // FROM <t> [;|where_clause]
-            let from_clause = ptr!(Self {
-                token: Token::From,
-                tag: Tag::None,
-                adjacent: vec![ptr!(Node {
-                    token: Token::TableOrColumnReference(String::new()),
-                    tag: Tag::Table,
-                    adjacent: vec![where_clause, end],
-                })],
-            });
-
-            // <c> [,|from_clause]
-            let col_refs_1 = ptr!(Node {
-                token: Token::TableOrColumnReference(String::new()),
-                tag: Tag::Targets,
-                adjacent: vec![from_clause],
-            });
-
-            // <t>.<c> [,|from_clause]
-            let col_refs_2 = ptr!(Node {
-                token: Token::TableAndColumnReference(String::new(), String::new()),
-                tag: Tag::None,
-                adjacent: vec![from_clause],
-            });
-
-            // Cycle
-            let comma = ptr!(Node {
-                token: Token::Comma,
-                tag: Tag::None,
-                adjacent: vec![col_refs_1, col_refs_2, from_clause],
-            });
-            (*col_refs_1).adjacent.push(comma);
-            (*col_refs_2).adjacent.push(comma);
-
-            // SELECT [*|(col_ref),*]
-            SELECT_STMT = ptr!(Self {
-                token: Token::Select,
-                tag: Tag::None,
-                adjacent: vec![
-                    ptr!(Self {
-                        token: Token::All,
-                        adjacent: vec![from_clause],
-                        tag: Tag::None,
-                    }),
-                    col_refs_1,
-                    col_refs_2,
-                ],
-            });
-
-            SELECT_STMT
+            SELECT_STMT as usize
         }
     }
 }
@@ -918,43 +660,43 @@ mod test {
 
         let tcs = [
             TestCase {
-                input: "* from tablea;",
+                input: "select * from tablea;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, * from tablea;",
+                input: "select columna, * from tablea;",
                 matches: false,
                 only: false,
             },
             TestCase {
-                input: "*, columna from tablea;",
+                input: "select *, columna from tablea;",
                 matches: false,
                 only: false,
             },
             TestCase {
-                input: "tablea.columna, columna from tablea;",
+                input: "select tablea.columna, columna from tablea;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea;",
+                input: "select columna, columnb from tablea;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea where columna > columnb;",
+                input: "select columna, columnb from tablea where columna > columnb;",
                 matches: true,
                 only: false,
             },
             TestCase {
                 input:
-                    "columna, columnb from tablea where columna > columnb and columnc = columnd;",
+                    "select columna, columnb from tablea where columna > columnb and columnc = columnd;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna > columnb \
                     and columnc = columnd \
                     or columna > columnb;",
@@ -962,49 +704,49 @@ mod test {
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where not columna > columnb;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna between 100 and 200;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna not between 100 and 200;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna in (1, 2, 3);",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna not in (1, 2, 3);",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna is null;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna is not null;",
                 matches: true,
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where columna > columnb \
                     and columnc in (1, 2, 3) \
                     or columnd between 100 and 200;",
@@ -1012,7 +754,7 @@ mod test {
                 only: false,
             },
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where not columna > columnb \
                     and columnc not in (1, 2, 3) \
                     or columnd not between 100 and 200;",
@@ -1021,7 +763,7 @@ mod test {
             },
             // TODO: look at this later
             TestCase {
-                input: "columna, columnb from tablea \
+                input: "select columna, columnb from tablea \
                     where not not not columna > columnb \
                     and columnc not in (1, 2, 3) \
                     or columnd not between 100 and 200
@@ -1042,25 +784,27 @@ mod test {
             }
 
             let mut l = Lexer::new(input);
-            let mut cur = Node::select_stmt();
+            let mut cur = Node::select_stmt2();
+
+            assert!(next_tkn!(l) == Token::Select);
 
             unsafe {
                 let mut m = false;
                 'l: loop {
-                    let node = &(*cur);
+                    let node = NODES[cur];
                     if node.adjacent.is_empty() {
                         break 'l;
                     }
 
-                    let tkn = next_tkn!(l);
+                    let tkn = l.next().unwrap();
 
                     m = false;
-                    'adj: for n in &node.adjacent {
-                        if tkn.teq(&(**n).token) {
-                            cur = *n;
+                    'adj: for n in node.adjacent.iter() {
+                        if NODES[n].token == tkn {
+                            cur = n;
                             m = true;
                             break 'adj;
-                        }
+                        };
                     }
 
                     if !m {
@@ -1073,7 +817,7 @@ mod test {
                 }
 
                 if !m && matches {
-                    panic!("Expected input to match");
+                    panic!("Expected input to match\ninput: {:?}", input);
                 }
 
                 if m && !matches {

@@ -603,9 +603,6 @@ impl Node {
                 ),
                 node!(State::Negation)
             ];
-            // Would this need to be inside c?
-            // c.push(node!(State::Negation, [[c]]));
-
             NODES[conn[0]].adjacent.extend(cond);
             NODES[conn[1]].adjacent.extend(cond);
             NODES[cond[4]].adjacent.extend(cond);
@@ -615,10 +612,7 @@ impl Node {
                 [node!(
                     State::TableOrColumnReference,
                     Tag::Table,
-                    [
-                        e,
-                        node!(State::Where, [[cond]], [node!(State::Negation, [[cond]])])
-                    ]
+                    [e, node!(State::Where, [[cond]])]
                 )]
             );
 

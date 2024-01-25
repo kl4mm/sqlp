@@ -2,12 +2,6 @@ use std::ops::Index;
 
 use crate::Token;
 
-macro_rules! ptr {
-    ($e:expr) => {
-        Box::into_raw(Box::new($e))
-    };
-}
-
 #[derive(Copy, Clone, Debug)]
 pub enum Tag {
     Targets,
@@ -371,7 +365,7 @@ macro_rules! node {
 
             let n = &mut NODES[i];
             n.token = $token;
-            n.adjacent = $a;
+            n.adjacent.extend($a);
 
             i
         }
@@ -383,7 +377,7 @@ macro_rules! node {
 
             let n = &mut NODES[i];
             n.token = $token;
-            n.adjacent = $a;
+            n.adjacent.extend($a);
 
             $(
                 n.adjacent.push($i);
@@ -510,7 +504,7 @@ impl Node {
         }
     }
 
-    pub fn select_stmt2() -> usize {
+    pub fn select_stmt() -> usize {
         static mut SELECT_STMT: isize = -1;
 
         unsafe {
@@ -629,8 +623,8 @@ impl Node {
             );
 
             // [<c>|<t>.<c>] [,|from_clause]
-            let cr1 = node!(State::TableOrColumnReference, [f]);
-            let cr2 = node!(State::TableAndColumnReference, [f]);
+            let cr1 = node!(State::TableOrColumnReference, Tag::Targets, [f]);
+            let cr2 = node!(State::TableAndColumnReference, Tag::Targets, [f]);
             let c = node!(State::Comma, [cr1, cr2]);
             NODES[cr1].adjacent.push(c);
             NODES[cr2].adjacent.push(c);
@@ -784,7 +778,7 @@ mod test {
             }
 
             let mut l = Lexer::new(input);
-            let mut cur = Node::select_stmt2();
+            let mut cur = Node::select_stmt();
 
             assert!(next_tkn!(l) == Token::Select);
 

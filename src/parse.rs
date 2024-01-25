@@ -167,17 +167,20 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
         let mut cur = Grammar::select_stmt();
 
         loop {
-            let node = &(*cur);
+            let node = grammar::NODES[cur];
             if node.adjacent.is_empty() {
                 break;
             }
 
             let tkn = next_tkn!(l);
             let mut m = false;
-            'adj: for n in &node.adjacent {
-                if tkn.teq(&(**n).token) {
-                    cur = *n;
+            'adj: for n in node.adjacent {
+                if grammar::NODES[n].token == tkn {
+                    // if tkn.teq(&(**n).token) {
+                    cur = n;
                     m = true;
+
+                    let node = grammar::NODES[n];
 
                     match tkn {
                         Token::Table
@@ -192,7 +195,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                             break 'adj;
                         }
 
-                        Token::TableOrColumnReference(r) => match (**n).tag {
+                        Token::TableOrColumnReference(r) => match node.tag {
                             Tag::Targets => {
                                 targets.push(Node::ColumnRef {
                                     alias: None,

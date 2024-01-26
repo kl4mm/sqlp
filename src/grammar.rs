@@ -50,6 +50,8 @@ pub enum State {
     In,
     Between,
     Is,
+    Group,
+    By,
 
     Eq,
     Neq,
@@ -218,6 +220,14 @@ impl PartialEq<Token> for State {
                 Token::TableOrColumnReference(_) => true,
                 _ => false,
             },
+            State::Group => match other {
+                Token::Group => true,
+                _ => false,
+            },
+            State::By => match other {
+                Token::By => true,
+                _ => false,
+            },
             State::Invalid => false,
         }
     }
@@ -358,7 +368,7 @@ macro_rules! node {
             i
         }
     };
-    ($token:expr, [[$a:ident]]) => {
+    ($token:expr, [[$a:expr]]) => {
          {
             let i = NODES_IDX;
             NODES_IDX += 1;
@@ -370,7 +380,7 @@ macro_rules! node {
             i
         }
     };
-    ($token:expr, [[$a:ident]], [$($i:expr),*]) => {
+    ($token:expr, [[$a:expr]], [$($i:expr),*]) => {
          {
             let i = NODES_IDX;
             NODES_IDX += 1;
@@ -512,10 +522,24 @@ impl Node {
                 return SELECT_STMT as usize;
             }
 
+            // ;
             let e = node!(State::Semicolon);
 
+            // GROUP BY [<c>|<t>.<c>]
+            let g = node!(
+                State::Group,
+                [node!(
+                    State::By,
+                    [[NODES[node!(c State::Comma, [
+                        node!(State::TableOrColumnReference, [c, e]),
+                        node!(State::TableAndColumnReference, [c, e])
+                    ])]
+                    .adjacent]]
+                )]
+            );
+
             // [(AND condition)*|(OR condition)*|;]
-            let conn = array![node!(State::Conjunction), node!(State::Disjunction), e];
+            let conn = array![node!(State::Conjunction), node!(State::Disjunction), g, e];
 
             // [<t>.<c>|<c>|StringLiteral|IntegerLiteral] c
             let rhs = array![
@@ -525,20 +549,23 @@ impl Node {
                 node!(State::IntegerLiteral, [[conn]])
             ];
 
-            // StringLiteral [,*|)]
-            let sl = node!(sl State::StringLiteral, [
-                node!(State::Comma, [sl]), // Cycle
-                node!(State::RParen, [[conn]])
-            ]);
-
-            // IntegerLiteral [,*|)]
-            let il = node!(il State::IntegerLiteral, [
-                node!(State::Comma, [il]),
-                node!(State::RParen, [[conn]])
-            ]);
-
-            // IN ([string_list|int_list])
-            let inexpr = node!(State::In, [node!(State::LParen, [sl, il])]);
+            // IN ([StringLiteral [,*|)]|IntegerLiteral [,*|)]])
+            let inexpr = node!(
+                State::In,
+                [node!(
+                    State::LParen,
+                    [
+                        node!(sl State::StringLiteral, [
+                            node!(State::Comma, [sl]), // Cycle
+                            node!(State::RParen, [[conn]])
+                        ]),
+                        node!(il State::IntegerLiteral, [
+                            node!(State::Comma, [il]), // Cycle
+                            node!(State::RParen, [[conn]])
+                        ])
+                    ]
+                )]
+            );
 
             // BETWEEN IntegerLiteral AND IntegerLiteral
             let btwexpr = node!(
@@ -612,18 +639,20 @@ impl Node {
                 [node!(
                     State::TableOrColumnReference,
                     Tag::Table,
-                    [e, node!(State::Where, [[cond]])]
+                    [e, g, node!(State::Where, [[cond]])]
                 )]
             );
 
-            // [<c>|<t>.<c>] [,|from_clause]
-            let cr1 = node!(State::TableOrColumnReference, Tag::Targets, [f]);
-            let cr2 = node!(State::TableAndColumnReference, Tag::Targets, [f]);
-            let c = node!(State::Comma, [cr1, cr2]);
-            NODES[cr1].adjacent.push(c);
-            NODES[cr2].adjacent.push(c);
-
-            SELECT_STMT = node!(State::Select, [node!(State::All, [f]), cr1, cr2]) as isize;
+            // SELECT [*| <c>|<t>.<c>] [,|from_clause]
+            SELECT_STMT = node!(
+                State::Select,
+                [[NODES[node!(c State::Comma, [
+                    node!(State::TableOrColumnReference, Tag::Targets, [c, f]),
+                    node!(State::TableAndColumnReference, Tag::Targets, [c, f])
+                ])]
+                .adjacent]],
+                [node!(State::All, [f])]
+            ) as isize;
 
             SELECT_STMT as usize
         }
@@ -746,6 +775,33 @@ mod test {
                     where not columna > columnb \
                     and columnc not in (1, 2, 3) \
                     or columnd not between 100 and 200;",
+                matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    group by columna;",
+                matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    where columna < columnb
+                    group by columna;",
+                matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    where not columna < columnb
+                    group by columna;",
+                matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    where columna in (\"1\", \"2\")
+                    group by columna;",
                 matches: true,
                 only: false,
             },

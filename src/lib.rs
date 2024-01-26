@@ -41,6 +41,8 @@ pub enum Token {
     In,
     Between,
     Is,
+    Group,
+    By,
 
     Eq,
     Neq,
@@ -54,64 +56,6 @@ pub enum Token {
 
     TableAndColumnReference(String, String),
     TableOrColumnReference(String),
-}
-
-impl Token {
-    fn teq(&self, other: &Self) -> bool {
-        match self {
-            // Ignore inner
-            Token::StringLiteral(_) => match other {
-                Token::StringLiteral(_) => true,
-                _ => false,
-            },
-            Token::IntegerLiteral(_) => match other {
-                Token::IntegerLiteral(_) => true,
-                _ => false,
-            },
-            Token::TableAndColumnReference(_, _) => match other {
-                Token::TableAndColumnReference(_, _) => true,
-                _ => false,
-            },
-            Token::TableOrColumnReference(_) => match other {
-                Token::TableOrColumnReference(_) => true,
-                _ => false,
-            },
-
-            t @ Token::Is
-            | t @ Token::Between
-            | t @ Token::In
-            | t @ Token::LParen
-            | t @ Token::RParen
-            | t @ Token::Create
-            | t @ Token::Table
-            | t @ Token::Int
-            | t @ Token::Select
-            | t @ Token::Insert
-            | t @ Token::Update
-            | t @ Token::Delete
-            | t @ Token::Into
-            | t @ Token::Values
-            | t @ Token::From
-            | t @ Token::Where
-            | t @ Token::Join
-            | t @ Token::On
-            | t @ Token::Using
-            | t @ Token::As
-            | t @ Token::Conjunction
-            | t @ Token::Disjunction
-            | t @ Token::Negation
-            | t @ Token::Null
-            | t @ Token::Semicolon
-            | t @ Token::Comma
-            | t @ Token::All
-            | t @ Token::Eq
-            | t @ Token::Neq
-            | t @ Token::Lt
-            | t @ Token::Le
-            | t @ Token::Gt
-            | t @ Token::Ge => t == other,
-        }
-    }
 }
 
 impl Into<Token> for &str {
@@ -148,6 +92,8 @@ impl Into<Token> for &str {
             "in" => Token::In,
             "between" => Token::Between,
             "is" => Token::Is,
+            "group" => Token::Group,
+            "by" => Token::By,
 
             "=" => Token::Eq,
             "!=" => Token::Neq,

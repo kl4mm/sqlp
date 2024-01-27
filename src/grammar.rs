@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::ops::Index;
 
 use crate::Token;
@@ -332,6 +331,12 @@ impl SArray {
         self.len += 1;
     }
 
+    pub fn pop(&mut self) -> usize {
+        let ret = self.inner[self.len - 1];
+        self.len -= 1;
+        ret
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -474,6 +479,8 @@ macro_rules! node {
 }
 
 fn copy_grammar(i: usize) -> usize {
+    use std::collections::HashSet;
+
     fn copy_grammar(i: usize, visited: &mut HashSet<usize>) -> usize {
         unsafe {
             if visited.contains(&i) {
@@ -537,39 +544,23 @@ impl Node {
         }
     }
 
-    pub fn select_stmt() -> usize {
-        static mut SELECT_STMT: isize = -1;
-
+    fn condition(conn: SArray) -> SArray {
         unsafe {
-            if SELECT_STMT >= 0 {
-                return SELECT_STMT as usize;
-            }
-
-            // ;
-            let e = node!(State::Semicolon);
-
-            // GROUP BY [<c>|<t>.<c>]
-            let g = node!(
-                State::Group,
-                [node!(
-                    State::By,
-                    [[NODES[node!(c State::Comma, [
-                        node!(State::TableOrColumnReference, [c, e]),
-                        node!(State::TableAndColumnReference, [c, e])
-                    ])]
-                    .adjacent]]
-                )]
-            );
-
-            // [(AND condition)*|(OR condition)*|;]
-            let conn = array![node!(State::Conjunction), node!(State::Disjunction), g, e];
-
             // [<t>.<c>|<c>|StringLiteral|IntegerLiteral] c
             let rhs = array![
                 node!(State::TableAndColumnReference, [[conn]]),
                 node!(State::TableOrColumnReference, [[conn]]),
                 node!(State::StringLiteral, [[conn]]),
                 node!(State::IntegerLiteral, [[conn]])
+            ];
+
+            let o = array![
+                node!(State::Eq, [[rhs]]),
+                node!(State::Neq, [[rhs]]),
+                node!(State::Gt, [[rhs]]),
+                node!(State::Ge, [[rhs]]),
+                node!(State::Lt, [[rhs]]),
+                node!(State::Le, [[rhs]])
             ];
 
             // IN ([StringLiteral [,*|)]|IntegerLiteral [,*|)]])
@@ -610,15 +601,6 @@ impl Node {
             // NOT [inexpr|btwexpr|isexpr]
             let notexpr = node!(State::Negation, [inexpr, btwexpr, isexpr]);
 
-            let o = array![
-                node!(State::Eq, [[rhs]]),
-                node!(State::Neq, [[rhs]]),
-                node!(State::Gt, [[rhs]]),
-                node!(State::Ge, [[rhs]]),
-                node!(State::Lt, [[rhs]]),
-                node!(State::Le, [[rhs]])
-            ];
-
             // TODO: add support for summands and factors in future. keeping it simple for now
             // TODO: add grammar for term (value, function, col_ref), which should also be used in
             // place of col_refs. sticking to col_refs and literals for now
@@ -630,7 +612,7 @@ impl Node {
             //   | IS [NOT|] NULL
             // ]
             // | NOT expr
-            let cond = array![
+            array![
                 node!(
                     State::TableAndColumnReference,
                     [[o]],
@@ -652,32 +634,82 @@ impl Node {
                     [notexpr, inexpr, btwexpr, isexpr]
                 ),
                 node!(State::Negation)
-            ];
+            ]
+        }
+    }
+
+    pub fn select_stmt() -> usize {
+        static mut SELECT_STMT: isize = -1;
+
+        unsafe {
+            if SELECT_STMT >= 0 {
+                return SELECT_STMT as usize;
+            }
+
+            // ;
+            let e = node!(State::Semicolon);
+
+            // GROUP BY [<c>|<t>.<c>]
+            let g = node!(
+                State::Group,
+                [node!(
+                    State::By,
+                    [[NODES[node!(c State::Comma, [
+                        node!(State::TableOrColumnReference, [c, e]),
+                        node!(State::TableAndColumnReference, [c, e])
+                    ])]
+                    .adjacent]]
+                )]
+            );
+
+            // [(AND condition)*|(OR condition)*|;]
+            let conn = array![node!(State::Conjunction), node!(State::Disjunction), g, e];
+
+            let cond = Self::condition(conn);
             NODES[conn[0]].adjacent.extend(cond);
             NODES[conn[1]].adjacent.extend(cond);
             NODES[cond[4]].adjacent.extend(cond);
 
             let w = node!(State::Where, [[cond]]);
 
+            let jconn = array![
+                node!(State::Conjunction),
+                node!(State::Disjunction),
+                node!(State::RParen, [g, e, w])
+            ];
+
+            let jcond = Self::condition(jconn);
+            NODES[jconn[0]].adjacent.extend(jcond);
+            NODES[jconn[1]].adjacent.extend(jcond);
+            NODES[cond[4]].adjacent.extend(jcond);
+
             let j = node!(
                 State::Join,
                 [
-                    node!(State::On, []),
-                    node!(
-                        State::Using,
-                        [node!(State::LParen, [[
-                            NODES[node!(c State::Comma, [
-                                node!(State::TableAndColumnReference, [c, node!(State::RParen, [e, w])]),
-                                node!(State::TableOrColumnReference, [c, node!(State::RParen, [e, w])])
-                            ])].adjacent
-                        ]])]
-                    )
+                    node!(State::TableOrColumnReference, [
+                        node!(State::On, [
+                              node!(State::LParen, [[jcond]])
+                        ]),
+                        node!(
+                            State::Using,
+                            [node!(State::LParen, [[
+                                NODES[node!(c State::Comma, [
+                                    node!(State::TableAndColumnReference, [c, node!(State::RParen, [e, w])]),
+                                    node!(State::TableOrColumnReference, [c, node!(State::RParen, [e, w])])
+                                ])].adjacent
+                            ]])]
+                        )
+                    ])
                 ]
             );
 
             let f = node!(
                 State::From,
-                [node!(State::TableOrColumnReference, Tag::Table, [e, g, w])]
+                [node!(
+                    State::TableOrColumnReference,
+                    Tag::Table,
+                    [e, g, w, j]
+                )]
             );
 
             // SELECT [*| <c>|<t>.<c>] [,|from_clause]
@@ -928,25 +960,25 @@ mod test {
             TestCase {
                 input: "select columna, columnb from tablea \
                     join tableb on (tablea.columna = tableb.columnb)
-                    where columna == 1
+                    where columna = 1
                     group by columna;",
-                matches: false,
+                matches: true,
                 only: false,
             },
             TestCase {
                 input: "select columna, columnb from tablea \
-                    join tableb on (tablea.columna = tableb.columnb)
-                    where columna == 1
+                    join tableb on (tablea.columna = tableb.columna and tablea.columbb = tableb.columnb)
+                    where columna = 1
                     group by columna;",
-                matches: false,
+                matches: true,
                 only: false,
             },
             TestCase {
                 input: "select columna, columnb from tablea \
                     join tableb using (columna, columnb)
-                    where columna == 1
+                    where columna = 1
                     group by columna;",
-                matches: false,
+                matches: true,
                 only: false,
             },
             // TODO: look at this later
@@ -983,7 +1015,11 @@ mod test {
             }
 
             if !m && matches {
-                panic!("Expected input to match\ninput: {:?}", input);
+                panic!(
+                    "Expected input to match\ninput: {:?}\nremaiming tokens: {:?}",
+                    input,
+                    l.to_vec()
+                );
             }
 
             if m && !matches {

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ops::Index;
 
 use crate::Token;
@@ -69,166 +70,165 @@ pub enum State {
     Invalid,
 }
 
-impl PartialEq<Token> for State {
-    fn eq(&self, other: &Token) -> bool {
+impl PartialEq<State> for Token {
+    fn eq(&self, other: &State) -> bool {
         match self {
-            State::LParen => match other {
-                Token::LParen => true,
+            Token::LParen => match other {
+                State::LParen => true,
                 _ => false,
             },
-            State::RParen => match other {
-                Token::RParen => true,
+            Token::RParen => match other {
+                State::RParen => true,
                 _ => false,
             },
-            State::Create => match other {
-                Token::Create => true,
+            Token::Create => match other {
+                State::Create => true,
                 _ => false,
             },
-            State::Table => match other {
-                Token::Table => true,
+            Token::Table => match other {
+                State::Table => true,
                 _ => false,
             },
-            State::Int => match other {
-                Token::Int => true,
+            Token::Int => match other {
+                State::Int => true,
                 _ => false,
             },
-            State::Select => match other {
-                Token::Select => true,
+            Token::Select => match other {
+                State::Select => true,
                 _ => false,
             },
-            State::Insert => match other {
-                Token::Insert => true,
+            Token::Insert => match other {
+                State::Insert => true,
                 _ => false,
             },
-            State::Update => match other {
-                Token::Update => true,
+            Token::Update => match other {
+                State::Update => true,
                 _ => false,
             },
-            State::Delete => match other {
-                Token::Delete => true,
+            Token::Delete => match other {
+                State::Delete => true,
                 _ => false,
             },
-            State::Into => match other {
-                Token::Into => true,
+            Token::Into => match other {
+                State::Into => true,
                 _ => false,
             },
-            State::Values => match other {
-                Token::Values => true,
+            Token::Values => match other {
+                State::Values => true,
                 _ => false,
             },
-            State::From => match other {
-                Token::From => true,
+            Token::From => match other {
+                State::From => true,
                 _ => false,
             },
-            State::Where => match other {
-                Token::Where => true,
+            Token::Where => match other {
+                State::Where => true,
                 _ => false,
             },
-            State::Join => match other {
-                Token::Join => true,
+            Token::Join => match other {
+                State::Join => true,
                 _ => false,
             },
-            State::On => match other {
-                Token::On => true,
+            Token::On => match other {
+                State::On => true,
                 _ => false,
             },
-            State::Using => match other {
-                Token::Using => true,
+            Token::Using => match other {
+                State::Using => true,
                 _ => false,
             },
-            State::As => match other {
-                Token::As => true,
+            Token::As => match other {
+                State::As => true,
                 _ => false,
             },
-            State::Conjunction => match other {
-                Token::Conjunction => true,
+            Token::Conjunction => match other {
+                State::Conjunction => true,
                 _ => false,
             },
-            State::Disjunction => match other {
-                Token::Disjunction => true,
+            Token::Disjunction => match other {
+                State::Disjunction => true,
                 _ => false,
             },
-            State::Negation => match other {
-                Token::Negation => true,
+            Token::Negation => match other {
+                State::Negation => true,
                 _ => false,
             },
-            State::Null => match other {
-                Token::Null => true,
+            Token::Null => match other {
+                State::Null => true,
                 _ => false,
             },
-            State::Semicolon => match other {
-                Token::Semicolon => true,
+            Token::Semicolon => match other {
+                State::Semicolon => true,
                 _ => false,
             },
-            State::Comma => match other {
-                Token::Comma => true,
+            Token::Comma => match other {
+                State::Comma => true,
                 _ => false,
             },
-            State::All => match other {
-                Token::All => true,
+            Token::All => match other {
+                State::All => true,
                 _ => false,
             },
-            State::In => match other {
-                Token::In => true,
+            Token::In => match other {
+                State::In => true,
                 _ => false,
             },
-            State::Between => match other {
-                Token::Between => true,
+            Token::Between => match other {
+                State::Between => true,
                 _ => false,
             },
-            State::Is => match other {
-                Token::Is => true,
+            Token::Is => match other {
+                State::Is => true,
                 _ => false,
             },
-            State::Eq => match other {
-                Token::Eq => true,
+            Token::Eq => match other {
+                State::Eq => true,
                 _ => false,
             },
-            State::Neq => match other {
-                Token::Neq => true,
+            Token::Neq => match other {
+                State::Neq => true,
                 _ => false,
             },
-            State::Lt => match other {
-                Token::Lt => true,
+            Token::Lt => match other {
+                State::Lt => true,
                 _ => false,
             },
-            State::Le => match other {
-                Token::Le => true,
+            Token::Le => match other {
+                State::Le => true,
                 _ => false,
             },
-            State::Gt => match other {
-                Token::Gt => true,
+            Token::Gt => match other {
+                State::Gt => true,
                 _ => false,
             },
-            State::Ge => match other {
-                Token::Ge => true,
+            Token::Ge => match other {
+                State::Ge => true,
                 _ => false,
             },
-            State::StringLiteral => match other {
-                Token::StringLiteral(_) => true,
+            Token::StringLiteral(_) => match other {
+                State::StringLiteral => true,
                 _ => false,
             },
-            State::IntegerLiteral => match other {
-                Token::IntegerLiteral(_) => true,
+            Token::IntegerLiteral(_) => match other {
+                State::IntegerLiteral => true,
                 _ => false,
             },
-            State::TableAndColumnReference => match other {
-                Token::TableAndColumnReference(_, _) => true,
+            Token::TableAndColumnReference(_, _) => match other {
+                State::TableAndColumnReference => true,
                 _ => false,
             },
-            State::TableOrColumnReference => match other {
-                Token::TableOrColumnReference(_) => true,
+            Token::TableOrColumnReference(_) => match other {
+                State::TableOrColumnReference => true,
                 _ => false,
             },
-            State::Group => match other {
-                Token::Group => true,
+            Token::Group => match other {
+                State::Group => true,
                 _ => false,
             },
-            State::By => match other {
-                Token::By => true,
+            Token::By => match other {
+                State::By => true,
                 _ => false,
             },
-            State::Invalid => false,
         }
     }
 }
@@ -353,11 +353,11 @@ pub static mut NODES: [SNode; 128] = [SNode {
 }; 128];
 
 macro_rules! node {
-    () => {
+    () => {{
             let i = NODES_IDX;
             NODES_IDX += 1;
             i
-    };
+    }};
     ($token:expr) => {
         {
             let i = NODES_IDX;
@@ -471,6 +471,29 @@ macro_rules! node {
             $ns
         }
     };
+}
+
+fn copy_grammar(i: usize) -> usize {
+    fn copy_grammar(i: usize, visited: &mut HashSet<usize>) -> usize {
+        unsafe {
+            if visited.contains(&i) {
+                return i;
+            }
+
+            visited.insert(i);
+
+            let n = NODES[i];
+            let j = node!(n.token, n.tag);
+
+            for k in n.adjacent {
+                NODES[j].adjacent.push(copy_grammar(k, visited));
+            }
+
+            j
+        }
+    }
+
+    copy_grammar(i, &mut HashSet::new())
 }
 
 impl Node {
@@ -634,13 +657,27 @@ impl Node {
             NODES[conn[1]].adjacent.extend(cond);
             NODES[cond[4]].adjacent.extend(cond);
 
+            let w = node!(State::Where, [[cond]]);
+
+            let j = node!(
+                State::Join,
+                [
+                    node!(State::On, []),
+                    node!(
+                        State::Using,
+                        [node!(State::LParen, [[
+                            NODES[node!(c State::Comma, [
+                                node!(State::TableAndColumnReference, [c, node!(State::RParen, [e, w])]),
+                                node!(State::TableOrColumnReference, [c, node!(State::RParen, [e, w])])
+                            ])].adjacent
+                        ]])]
+                    )
+                ]
+            );
+
             let f = node!(
                 State::From,
-                [node!(
-                    State::TableOrColumnReference,
-                    Tag::Table,
-                    [e, g, node!(State::Where, [[cond]])]
-                )]
+                [node!(State::TableOrColumnReference, Tag::Table, [e, g, w])]
             );
 
             // SELECT [*| <c>|<t>.<c>] [,|from_clause]
@@ -664,6 +701,89 @@ mod test {
     use crate::{next_tkn, parse::Error, Lexer};
 
     use super::*;
+
+    #[test]
+    fn test_copy_grammar() {
+        struct Testcase {
+            g: usize,
+            input: &'static str,
+        }
+
+        unsafe {
+            let tcs = [
+                Testcase {
+                    g: node!(
+                        State::Invalid,
+                        [node!(
+                            State::Select,
+                            [node!(State::All, [node!(State::From)])]
+                        )]
+                    ),
+                    input: "select * from",
+                },
+                Testcase {
+                    g: node!(
+                        State::Invalid,
+                        [[NODES[node!(c State::Comma, [
+                            node!(State::IntegerLiteral, [c, node!(State::Semicolon)]),
+                            node!(State::StringLiteral, [c, node!(State::Semicolon)])
+                        ])]
+                        .adjacent]]
+                    ),
+                    input: "1, 2, 3, 4, 5;",
+                },
+            ];
+
+            for Testcase { g, input } in tcs {
+                let mut l = Lexer::new(input);
+                let mut lc = Lexer::new(input);
+                let gc = copy_grammar(g);
+
+                assert!(test(&mut l, g));
+                assert!(test(&mut lc, gc));
+
+                // Modify the copy and ensure the original remains the same
+                NODES[gc]
+                    .adjacent
+                    .push(node!(State::Semicolon, [NODES[gc].adjacent[0]]));
+                let ninput = format!("; {input}");
+                let mut l = Lexer::new(&ninput);
+                let mut lc = Lexer::new(&ninput);
+
+                assert!(!test(&mut l, g));
+                assert!(test(&mut lc, gc));
+            }
+        }
+    }
+
+    fn test(l: &mut Lexer<'_>, mut cur: usize) -> bool {
+        unsafe {
+            let mut m = false;
+            'l: loop {
+                let node = NODES[cur];
+                if node.adjacent.is_empty() {
+                    break 'l;
+                }
+
+                let tkn = l.next().unwrap();
+
+                m = false;
+                'adj: for n in node.adjacent.iter() {
+                    if tkn == NODES[n].token {
+                        cur = n;
+                        m = true;
+                        break 'adj;
+                    };
+                }
+
+                if !m {
+                    break 'l;
+                }
+            }
+
+            m
+        }
+    }
 
     #[test]
     fn test_select_grammar() -> Result<(), Error> {
@@ -805,6 +925,30 @@ mod test {
                 matches: true,
                 only: false,
             },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    join tableb on (tablea.columna = tableb.columnb)
+                    where columna == 1
+                    group by columna;",
+                matches: false,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    join tableb on (tablea.columna = tableb.columnb)
+                    where columna == 1
+                    group by columna;",
+                matches: false,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    join tableb using (columna, columnb)
+                    where columna == 1
+                    group by columna;",
+                matches: false,
+                only: false,
+            },
             // TODO: look at this later
             TestCase {
                 input: "select columna, columnb from tablea \
@@ -828,45 +972,22 @@ mod test {
             }
 
             let mut l = Lexer::new(input);
-            let mut cur = Node::select_stmt();
+            let cur = Node::select_stmt();
 
             assert!(next_tkn!(l) == Token::Select);
 
-            unsafe {
-                let mut m = false;
-                'l: loop {
-                    let node = NODES[cur];
-                    if node.adjacent.is_empty() {
-                        break 'l;
-                    }
+            let m = test(&mut l, cur);
 
-                    let tkn = l.next().unwrap();
+            if !m && !matches {
+                continue;
+            }
 
-                    m = false;
-                    'adj: for n in node.adjacent.iter() {
-                        if NODES[n].token == tkn {
-                            cur = n;
-                            m = true;
-                            break 'adj;
-                        };
-                    }
+            if !m && matches {
+                panic!("Expected input to match\ninput: {:?}", input);
+            }
 
-                    if !m {
-                        break 'l;
-                    }
-                }
-
-                if !m && !matches {
-                    continue;
-                }
-
-                if !m && matches {
-                    panic!("Expected input to match\ninput: {:?}", input);
-                }
-
-                if m && !matches {
-                    panic!("Expected input to not match");
-                }
+            if m && !matches {
+                panic!("Expected input to not match");
             }
         }
 
@@ -905,45 +1026,22 @@ mod test {
 
         for TestCase { input, matches } in tcs {
             let mut l = Lexer::new(input);
-            let mut cur = Node::create_stmt();
+            let cur = Node::create_stmt();
 
             assert!(next_tkn!(l) == Token::Create);
 
-            unsafe {
-                let mut m = false;
-                'l: loop {
-                    let node = NODES[cur];
-                    if node.adjacent.is_empty() {
-                        break 'l;
-                    }
+            let m = test(&mut l, cur);
 
-                    let tkn = l.next().unwrap();
+            if !m && !matches {
+                continue;
+            }
 
-                    m = false;
-                    'adj: for n in node.adjacent.iter() {
-                        if NODES[n].token == tkn {
-                            cur = n;
-                            m = true;
-                            break 'adj;
-                        };
-                    }
+            if !m && matches {
+                panic!("Expected input to match\ninput: {:?}", input);
+            }
 
-                    if !m {
-                        break 'l;
-                    }
-                }
-
-                if !m && !matches {
-                    continue;
-                }
-
-                if !m && matches {
-                    panic!("Expected input to match\ninput: {:?}", input);
-                }
-
-                if m && !matches {
-                    panic!("Expected input to not match");
-                }
+            if m && !matches {
+                panic!("Expected input to not match");
             }
         }
 

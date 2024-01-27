@@ -87,7 +87,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
             let tkn = next_tkn!(l);
             let mut m = false;
             'adj: for n in node.adjacent.iter() {
-                if grammar::NODES[n].token == tkn {
+                if tkn == grammar::NODES[n].token {
                     cur = n;
                     m = true;
 
@@ -110,7 +110,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                                     cur = node
                                         .adjacent
                                         .iter()
-                                        .find(|&j| grammar::NODES[j].token == Token::Int)
+                                        .find(|&j| Token::Int == grammar::NODES[j].token)
                                         .expect("infallible");
 
                                     match ntkn {
@@ -175,8 +175,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
             let tkn = next_tkn!(l);
             let mut m = false;
             'adj: for n in node.adjacent {
-                if grammar::NODES[n].token == tkn {
-                    // if tkn.teq(&(**n).token) {
+                if tkn == grammar::NODES[n].token {
                     cur = n;
                     m = true;
 

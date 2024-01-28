@@ -52,6 +52,9 @@ pub enum State {
     Is,
     Group,
     By,
+    Order,
+    Asc,
+    Desc,
 
     Eq,
     Neq,
@@ -228,6 +231,18 @@ impl PartialEq<State> for Token {
                 State::By => true,
                 _ => false,
             },
+            Token::Order => match other {
+                State::Order => true,
+                _ => false,
+            },
+            Token::Asc => match other {
+                State::Asc => true,
+                _ => false,
+            },
+            Token::Desc => match other {
+                State::Desc => true,
+                _ => false,
+            },
         }
     }
 }
@@ -351,11 +366,11 @@ impl SArray {
 }
 
 static mut NODES_IDX: usize = 0;
-pub static mut NODES: [SNode; 128] = [SNode {
+pub static mut NODES: [SNode; 256] = [SNode {
     token: State::Invalid,
     tag: Tag::None,
     adjacent: array!(),
-}; 128];
+}; 256];
 
 macro_rules! node {
     () => {{
@@ -649,21 +664,45 @@ impl Node {
             // ;
             let e = node!(State::Semicolon);
 
+            // ORDER BY [<c>|<t>.<c>] [ASC|DESC]
+            let o = node!(
+                State::Order,
+                [node!(
+                    State::By,
+                    [
+                        node!(
+                            State::TableOrColumnReference,
+                            [node!(State::Asc, [e]), node!(State::Desc, [e]), e]
+                        ),
+                        node!(
+                            State::TableAndColumnReference,
+                            [node!(State::Asc, [e]), node!(State::Desc, [e]), e]
+                        )
+                    ]
+                )]
+            );
+
             // GROUP BY [<c>|<t>.<c>]
             let g = node!(
                 State::Group,
                 [node!(
                     State::By,
                     [[NODES[node!(c State::Comma, [
-                        node!(State::TableOrColumnReference, [c, e]),
-                        node!(State::TableAndColumnReference, [c, e])
+                        node!(State::TableOrColumnReference, [c, o, e]),
+                        node!(State::TableAndColumnReference, [c, o, e])
                     ])]
                     .adjacent]]
                 )]
             );
 
             // [(AND condition)*|(OR condition)*|;]
-            let conn = array![node!(State::Conjunction), node!(State::Disjunction), g, e];
+            let conn = array![
+                node!(State::Conjunction),
+                node!(State::Disjunction),
+                o,
+                g,
+                e
+            ];
 
             let cond = Self::condition(conn);
             NODES[conn[0]].adjacent.extend(cond);
@@ -675,7 +714,7 @@ impl Node {
             let jconn = array![
                 node!(State::Conjunction),
                 node!(State::Disjunction),
-                node!(State::RParen, [g, e, w])
+                node!(State::RParen, [o, g, e, w])
             ];
 
             let jcond = Self::condition(jconn);
@@ -694,8 +733,8 @@ impl Node {
                             State::Using,
                             [node!(State::LParen, [[
                                 NODES[node!(c State::Comma, [
-                                    node!(State::TableAndColumnReference, [c, node!(State::RParen, [e, w])]),
-                                    node!(State::TableOrColumnReference, [c, node!(State::RParen, [e, w])])
+                                    node!(State::TableAndColumnReference, [c, node!(State::RParen, [o, g, e, w])]),
+                                    node!(State::TableOrColumnReference, [c, node!(State::RParen, [o, g, e, w])])
                                 ])].adjacent
                             ]])]
                         )
@@ -977,6 +1016,29 @@ mod test {
                 input: "select columna, columnb from tablea \
                     join tableb using (columna, columnb)
                     where columna = 1
+                    group by columna;",
+                matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    join tableb using (columna, columnb)
+                    where columna = 1
+                    group by columna
+                    order by columna desc;",
+                matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    join tableb using (columna, columnb)
+                    order by columna asc;",
+                matches: true,
+                only: false,
+            },
+            TestCase {
+                input: "select columna, columnb from tablea \
+                    join tableb using (columna, columnb)
                     group by columna;",
                 matches: true,
                 only: false,

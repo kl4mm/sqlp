@@ -43,6 +43,9 @@ pub enum Token {
     Is,
     Group,
     By,
+    Order,
+    Asc,
+    Desc,
 
     Eq,
     Neq,
@@ -94,6 +97,9 @@ impl Into<Token> for &str {
             "is" => Token::Is,
             "group" => Token::Group,
             "by" => Token::By,
+            "order" => Token::Order,
+            "asc" => Token::Asc,
+            "desc" => Token::Desc,
 
             "=" => Token::Eq,
             "!=" => Token::Neq,

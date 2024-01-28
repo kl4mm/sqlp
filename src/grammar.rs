@@ -72,178 +72,69 @@ pub enum State {
     Invalid,
 }
 
+macro_rules! match_state {
+    ($self:ident, $other:ident, [$($t1:tt $(=> $t2:tt)?),*] ) => {
+        match $self {
+            $(
+                Token::$t1 $($t2)? => match $other {
+                    State::$t1 => true,
+                    _ => false
+                },
+            )*
+        }
+    };
+}
+
 impl PartialEq<State> for Token {
     fn eq(&self, other: &State) -> bool {
-        match self {
-            Token::LParen => match other {
-                State::LParen => true,
-                _ => false,
-            },
-            Token::RParen => match other {
-                State::RParen => true,
-                _ => false,
-            },
-            Token::Create => match other {
-                State::Create => true,
-                _ => false,
-            },
-            Token::Table => match other {
-                State::Table => true,
-                _ => false,
-            },
-            Token::Int => match other {
-                State::Int => true,
-                _ => false,
-            },
-            Token::Select => match other {
-                State::Select => true,
-                _ => false,
-            },
-            Token::Insert => match other {
-                State::Insert => true,
-                _ => false,
-            },
-            Token::Update => match other {
-                State::Update => true,
-                _ => false,
-            },
-            Token::Delete => match other {
-                State::Delete => true,
-                _ => false,
-            },
-            Token::Into => match other {
-                State::Into => true,
-                _ => false,
-            },
-            Token::Values => match other {
-                State::Values => true,
-                _ => false,
-            },
-            Token::From => match other {
-                State::From => true,
-                _ => false,
-            },
-            Token::Where => match other {
-                State::Where => true,
-                _ => false,
-            },
-            Token::Join => match other {
-                State::Join => true,
-                _ => false,
-            },
-            Token::On => match other {
-                State::On => true,
-                _ => false,
-            },
-            Token::Using => match other {
-                State::Using => true,
-                _ => false,
-            },
-            Token::As => match other {
-                State::As => true,
-                _ => false,
-            },
-            Token::Conjunction => match other {
-                State::Conjunction => true,
-                _ => false,
-            },
-            Token::Disjunction => match other {
-                State::Disjunction => true,
-                _ => false,
-            },
-            Token::Negation => match other {
-                State::Negation => true,
-                _ => false,
-            },
-            Token::Null => match other {
-                State::Null => true,
-                _ => false,
-            },
-            Token::Semicolon => match other {
-                State::Semicolon => true,
-                _ => false,
-            },
-            Token::Comma => match other {
-                State::Comma => true,
-                _ => false,
-            },
-            Token::All => match other {
-                State::All => true,
-                _ => false,
-            },
-            Token::In => match other {
-                State::In => true,
-                _ => false,
-            },
-            Token::Between => match other {
-                State::Between => true,
-                _ => false,
-            },
-            Token::Is => match other {
-                State::Is => true,
-                _ => false,
-            },
-            Token::Eq => match other {
-                State::Eq => true,
-                _ => false,
-            },
-            Token::Neq => match other {
-                State::Neq => true,
-                _ => false,
-            },
-            Token::Lt => match other {
-                State::Lt => true,
-                _ => false,
-            },
-            Token::Le => match other {
-                State::Le => true,
-                _ => false,
-            },
-            Token::Gt => match other {
-                State::Gt => true,
-                _ => false,
-            },
-            Token::Ge => match other {
-                State::Ge => true,
-                _ => false,
-            },
-            Token::StringLiteral(_) => match other {
-                State::StringLiteral => true,
-                _ => false,
-            },
-            Token::IntegerLiteral(_) => match other {
-                State::IntegerLiteral => true,
-                _ => false,
-            },
-            Token::TableAndColumnReference(_, _) => match other {
-                State::TableAndColumnReference => true,
-                _ => false,
-            },
-            Token::TableOrColumnReference(_) => match other {
-                State::TableOrColumnReference => true,
-                _ => false,
-            },
-            Token::Group => match other {
-                State::Group => true,
-                _ => false,
-            },
-            Token::By => match other {
-                State::By => true,
-                _ => false,
-            },
-            Token::Order => match other {
-                State::Order => true,
-                _ => false,
-            },
-            Token::Asc => match other {
-                State::Asc => true,
-                _ => false,
-            },
-            Token::Desc => match other {
-                State::Desc => true,
-                _ => false,
-            },
-        }
+        match_state!(
+            self,
+            other,
+            [
+                LParen,
+                RParen,
+                Create,
+                Table,
+                Int,
+                Select,
+                Insert,
+                Update,
+                Delete,
+                Into,
+                Values,
+                From,
+                Where,
+                Join,
+                On,
+                Using,
+                As,
+                Conjunction,
+                Disjunction,
+                Negation,
+                Null,
+                Semicolon,
+                Comma,
+                All,
+                In,
+                Between,
+                Is,
+                Group,
+                By,
+                Order,
+                Asc,
+                Desc,
+                Eq,
+                Neq,
+                Lt,
+                Le,
+                Gt,
+                Ge,
+                StringLiteral => (_),
+                IntegerLiteral => (_),
+                TableAndColumnReference => (_, _),
+                TableOrColumnReference => (_)
+            ]
+        )
     }
 }
 

@@ -662,7 +662,7 @@ impl Node {
 
 #[cfg(test)]
 mod test {
-    use crate::{next_tkn, parse::Error, Lexer};
+    use crate::{parse::Error, Lexer};
 
     use super::*;
 
@@ -729,7 +729,7 @@ mod test {
                     break 'l;
                 }
 
-                let tkn = l.next().unwrap();
+                let tkn = l.next();
 
                 m = false;
                 'adj: for n in node.adjacent.iter() {
@@ -961,7 +961,7 @@ mod test {
             let mut l = Lexer::new(input);
             let cur = Node::select_stmt();
 
-            assert!(next_tkn!(l) == Token::Select);
+            assert!(l.next() == Token::Select);
 
             let m = test(&mut l, cur);
 
@@ -1019,7 +1019,7 @@ mod test {
             let mut l = Lexer::new(input);
             let cur = Node::create_stmt();
 
-            assert!(next_tkn!(l) == Token::Create);
+            assert!(l.next() == Token::Create);
 
             let m = test(&mut l, cur);
 

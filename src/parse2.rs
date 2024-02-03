@@ -1,53 +1,9 @@
-use crate::{next_tkn, Lexer, Token};
+use crate::{Lexer, Token};
 
-macro_rules! next_tkn {
-    ($l:ident) => {
-        $l.next().expect("expected token")
-    };
-}
-
-struct ListCell {
-    value: Node,
-    next: Option<Box<ListCell>>,
-}
-
-impl ListCell {
-    fn new(value: Node) -> Self {
-        Self { value, next: None }
-    }
-
-    fn next(mut self, value: Node) -> Self {
-        self.next = Some(Box::new(Self::new(value)));
-
-        self
-    }
-}
-
-struct List {
-    head: Option<Box<ListCell>>,
-}
-
-impl List {
-    fn new() -> Self {
-        Self { head: None }
-    }
-
-    fn insert(mut self, value: Node) -> Self {
-        let mut cur = &mut self.head;
-
-        while let Some(cell) = cur {
-            cur = &mut cell.next;
-        }
-
-        *cur = Some(Box::new(ListCell::new(value)));
-
-        self
-    }
-}
-
-enum Node {
+#[derive(Debug, PartialEq)]
+pub enum Node {
     Select {
-        fields: List,
+        fields: Vec<Node>,
         table_expr: Box<Node>,         // TableRef or Select
         where_expr: Option<Box<Node>>, // WhereExpr
         group_expr: Option<Box<Node>>,
@@ -71,18 +27,36 @@ enum Node {
     None,
 }
 
-fn query(l: &mut Lexer) -> Node {
-    match next_tkn!(l) {
-        Token::Select => select(l),
-        _ => Node::None,
+pub struct Unexpected(Token);
+
+impl std::fmt::Display for Unexpected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unexpected token: {:?}", self.0)
     }
 }
 
-fn select(l: &mut Lexer) -> Node {
-    let f = fields(l);
-    let t = table_expr(l);
+impl std::fmt::Debug for Unexpected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unexpected token: {:?}", self.0)
+    }
+}
 
-    Node::Select {
+impl std::error::Error for Unexpected {}
+
+type Result<T> = std::result::Result<T, Unexpected>;
+
+pub fn query(l: &mut Lexer) -> Result<Node> {
+    match l.next() {
+        Token::Select => select(l),
+        t => Err(Unexpected(t))?,
+    }
+}
+
+fn select(l: &mut Lexer) -> Result<Node> {
+    let f = fields(l)?;
+    let t = table_expr(l)?;
+
+    Ok(Node::Select {
         fields: f,
         table_expr: Box::new(t),
         where_expr: None,
@@ -90,30 +64,30 @@ fn select(l: &mut Lexer) -> Node {
         order_expr: None,
         join_expr: None,
         limit: None,
-    }
+    })
 }
 
-fn fields(l: &mut Lexer) -> List {
+fn fields(l: &mut Lexer) -> Result<Vec<Node>> {
     match l.peek() {
         Token::All => {
             l.next();
-            return List::new().insert(Node::All);
+            return Ok(vec![Node::All]);
         }
 
         _ => column_list(l),
     }
 }
 
-fn column_list(l: &mut Lexer) -> List {
+fn column_list(l: &mut Lexer) -> Result<Vec<Node>> {
     #[derive(PartialEq, Debug)]
     enum State {
         Comma,
         Column,
     }
 
-    fn column_list(l: &mut Lexer, mut list: List, state: State) -> List {
+    fn column_list(l: &mut Lexer, mut list: Vec<Node>, state: State) -> Result<Vec<Node>> {
         match l.peek() {
-            Token::From if state == State::Comma => return list,
+            Token::From if state == State::Comma => return Ok(list),
             Token::Comma if state == State::Comma => {
                 l.next();
                 column_list(l, list, State::Column)
@@ -121,45 +95,43 @@ fn column_list(l: &mut Lexer) -> List {
             Token::TableOrColumnReference(_) | Token::TableAndColumnReference(_, _)
                 if state == State::Column =>
             {
-                list = list.insert(column_ref(l));
+                list.push(column_ref(l)?);
                 column_list(l, list, State::Comma)
             }
 
-            t => {
-                panic!("unexpected column/state");
-            }
+            t => Err(Unexpected(t)),
         }
     }
 
-    column_list(l, List::new(), State::Column)
+    column_list(l, Vec::new(), State::Column)
 }
 
-fn column_ref(l: &mut Lexer) -> Node {
-    match l.next().unwrap() {
-        Token::TableOrColumnReference(column) => Node::ColumnRef {
+fn column_ref(l: &mut Lexer) -> Result<Node> {
+    match l.next() {
+        Token::TableOrColumnReference(column) => Ok(Node::ColumnRef {
             table: None,
             column,
             alias: None,
-        },
+        }),
 
-        Token::TableAndColumnReference(table, column) => Node::ColumnRef {
+        Token::TableAndColumnReference(table, column) => Ok(Node::ColumnRef {
             table: Some(table),
             column,
             alias: None,
-        },
+        }),
 
-        _ => panic!("unexpected token"),
+        t => Err(Unexpected(t)),
     }
 }
 
-fn table_expr(l: &mut Lexer) -> Node {
-    if l.next().unwrap() != Token::From {
+fn table_expr(l: &mut Lexer) -> Result<Node> {
+    if l.next() != Token::From {
         panic!("unexpected token");
     }
 
-    match l.next().unwrap() {
-        Token::TableOrColumnReference(table) => Node::TableRef(table),
-        _ => panic!("unexpected token"), // TODO: parse select
+    match l.next() {
+        Token::TableOrColumnReference(table) => Ok(Node::TableRef(table)),
+        t => Err(Unexpected(t)), // TODO: parse select
     }
 }
 
@@ -168,7 +140,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_parse_select() {
+    fn test_parse_select() -> Result<()> {
         struct Test {
             input: &'static str,
             want: Node,
@@ -177,21 +149,76 @@ mod test {
         let tcs = [
             Test {
                 input: "select * from tablea;",
-                want: Node::None,
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table_expr: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: None,
+                    group_expr: None,
+                    order_expr: None,
+                    join_expr: None,
+                    limit: None,
+                },
             },
             Test {
                 input: "select columna, columnb from tablea;",
-                want: Node::None,
+                want: Node::Select {
+                    fields: vec![
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columna".into(),
+                            alias: None,
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnb".into(),
+                            alias: None,
+                        },
+                    ],
+                    table_expr: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: None,
+                    group_expr: None,
+                    order_expr: None,
+                    join_expr: None,
+                    limit: None,
+                },
             },
             Test {
                 input: "select columna, columnb, columnc from tablea;",
-                want: Node::None,
+                want: Node::Select {
+                    fields: vec![
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columna".into(),
+                            alias: None,
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnb".into(),
+                            alias: None,
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnc".into(),
+                            alias: None,
+                        },
+                    ],
+                    table_expr: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: None,
+                    group_expr: None,
+                    order_expr: None,
+                    join_expr: None,
+                    limit: None,
+                },
             },
         ];
 
         for Test { input, want } in tcs {
             let mut l = Lexer::new(input);
-            let q = query(&mut l);
+            let have = query(&mut l)?;
+
+            assert!(want == have, "Want: {:?}\nHave: {:?}", want, have);
         }
+
+        Ok(())
     }
 }

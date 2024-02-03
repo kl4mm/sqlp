@@ -2,13 +2,6 @@ pub mod grammar;
 pub mod parse;
 pub mod parse2;
 
-#[macro_export]
-macro_rules! next_tkn {
-    ($l:expr) => {
-        $l.next().ok_or(Error::Invalid)?
-    };
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Token {
     LParen,
@@ -144,9 +137,9 @@ impl<'a> Lexer<'a> {
         Self { src }
     }
 
-    pub fn next(&mut self) -> Option<Token> {
+    pub fn next(&mut self) -> Token {
         if self.src.is_empty() {
-            return None;
+            return Token::Eof;
         }
 
         while !self.src.is_empty() {
@@ -157,10 +150,10 @@ impl<'a> Lexer<'a> {
             }
 
             self.src = &self.src[s.len()..];
-            return Some(s.into());
+            return s.into();
         }
 
-        None
+        Token::Eof
     }
 
     pub fn peek(&self) -> Token {
@@ -184,8 +177,13 @@ impl<'a> Lexer<'a> {
 
     pub fn to_vec(mut self) -> Vec<Token> {
         let mut tkns = Vec::new();
-        while let Some(t) = self.next() {
+        loop {
+            let t = self.next();
+            let eof = t == Token::Eof;
             tkns.push(t);
+            if eof {
+                break;
+            }
         }
 
         tkns
@@ -326,23 +324,23 @@ mod test {
         let tcs = [
             TestCase {
                 input: "",
-                want: vec![],
+                want: vec![Token::Eof],
             },
             TestCase {
                 input: "select update delete",
-                want: vec![Token::Select, Token::Update, Token::Delete],
+                want: vec![Token::Select, Token::Update, Token::Delete, Token::Eof],
             },
             TestCase {
                 input: "    select update delete",
-                want: vec![Token::Select, Token::Update, Token::Delete],
+                want: vec![Token::Select, Token::Update, Token::Delete, Token::Eof],
             },
             TestCase {
                 input: "select update delete    ",
-                want: vec![Token::Select, Token::Update, Token::Delete],
+                want: vec![Token::Select, Token::Update, Token::Delete, Token::Eof],
             },
             TestCase {
                 input: "select    update    delete",
-                want: vec![Token::Select, Token::Update, Token::Delete],
+                want: vec![Token::Select, Token::Update, Token::Delete, Token::Eof],
             },
             TestCase {
                 input: "select, update, delete",
@@ -352,6 +350,7 @@ mod test {
                     Token::Update,
                     Token::Comma,
                     Token::Delete,
+                    Token::Eof
                 ],
             },
             TestCase {
@@ -362,19 +361,20 @@ mod test {
                     Token::Update,
                     Token::Comma,
                     Token::Delete,
+                     Token::Eof       
                 ],
             },
             TestCase {
                 input: ")(",
-                want: vec![Token::RParen, Token::LParen],
+                want: vec![Token::RParen, Token::LParen, Token::Eof],
             },
             TestCase {
                 input: ";,)(",
-                want: vec![Token::Semicolon, Token::Comma, Token::RParen, Token::LParen],
+                want: vec![Token::Semicolon, Token::Comma, Token::RParen, Token::LParen, Token::Eof],
             },
             TestCase {
                 input: "\";,)(\n\"\nand",
-                want: vec![Token::StringLiteral(";,)(\n".into()), Token::Conjunction],
+                want: vec![Token::StringLiteral(";,)(\n".into()), Token::Conjunction,Token::Eof],
             },
             TestCase {
                 input: "into(table.columna,table.columnb)values(1,2);",
@@ -392,6 +392,7 @@ mod test {
                     Token::IntegerLiteral(2),
                     Token::RParen,
                     Token::Semicolon,
+                    Token::Eof
                 ],
             },
             TestCase {
@@ -402,6 +403,7 @@ mod test {
                     Token::From,
                     Token::TableOrColumnReference("tablea".into()),
                     Token::Semicolon,
+                    Token::Eof
                 ],
             },
             TestCase {
@@ -413,6 +415,7 @@ mod test {
                     Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::From,
                     Token::TableOrColumnReference("tablea".into()),
+                    Token::Eof
                 ],
             },
             TestCase {
@@ -434,6 +437,7 @@ mod test {
                     Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::Gt,
                     Token::IntegerLiteral(1234),
+                    Token::Eof
                 ],
             },
             TestCase {
@@ -463,6 +467,7 @@ mod test {
                     Token::TableAndColumnReference("tablea".into(), "columnb".into()),
                     Token::Gt,
                     Token::IntegerLiteral(1234),
+                    Token::Eof
                 ],
             },
             TestCase {
@@ -490,6 +495,7 @@ mod test {
                     Token::Comma,
                     Token::IntegerLiteral(2),
                     Token::RParen,
+                    Token::Eof
                 ]
             },
             TestCase {
@@ -508,7 +514,8 @@ mod test {
                     Token::TableOrColumnReference("columnb".into()),
                     Token::Int,
                     Token::RParen,
-                    Token::Semicolon
+                    Token::Semicolon,
+                    Token::Eof
                 ]
             }
         ];

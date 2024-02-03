@@ -1,6 +1,6 @@
 use crate::{
     grammar::{self, Node as Grammar, Tag},
-    next_tkn, Lexer, Token,
+    Lexer, Token,
 };
 
 #[derive(PartialEq, Debug)]
@@ -40,7 +40,7 @@ pub enum Node {
 
     ColumnRef {
         alias: Option<String>,
-        family: Option<String>,
+        table: Option<String>,
         name: String,
     },
 
@@ -48,8 +48,39 @@ pub enum Node {
         name: String,
     },
 
+    Binary {
+        op: Box<Node>,
+        lhs: Box<Node>,
+        rhs: Box<Node>,
+    },
+
+    Unary {
+        op: Box<Node>,
+        rhs: Box<Node>,
+    },
+
+    WhereClause {
+        conn: Option<Box<Node>>,
+        lhs: Box<Node>,
+        rhs: Option<Box<Node>>,
+    },
+
+    Conjunction,
+    Disjunction,
+
     Invalid,
 }
+
+// fn example() {
+//     let e = Node::WhereClause {
+//         conn: Some(Box::new(Node::Conjunction)),
+//         lhs: Box::new(Node::Unary {
+//             op: todo!(),
+//             rhs: Box::new( ),
+//         }),
+//         rhs: (),
+//     };
+// }
 
 #[derive(Debug)]
 pub enum Error {
@@ -59,7 +90,7 @@ pub enum Error {
 }
 
 pub fn parse_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
-    let tkn = next_tkn!(l);
+    let tkn = l.next();
 
     Ok(match tkn {
         Token::Create => parse_create_stmt(l)?,
@@ -84,7 +115,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                 break;
             }
 
-            let tkn = next_tkn!(l);
+            let tkn = l.next();
             let mut m = false;
             'adj: for n in node.adjacent.iter() {
                 if tkn == grammar::NODES[n].token {
@@ -106,7 +137,7 @@ fn parse_create_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                                 Tag::Defs => {
                                     // Look ahead for type
                                     // Advance grammar cursor
-                                    let ntkn = next_tkn!(l);
+                                    let ntkn = l.next();
                                     cur = node
                                         .adjacent
                                         .iter()
@@ -172,7 +203,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                 break;
             }
 
-            let tkn = next_tkn!(l);
+            let tkn = l.next();
             let mut m = false;
             'adj: for n in node.adjacent {
                 if tkn == grammar::NODES[n].token {
@@ -198,7 +229,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                             Tag::Targets => {
                                 targets.push(Node::ColumnRef {
                                     alias: None,
-                                    family: None,
+                                    table: None,
                                     name: r,
                                 });
                                 break 'adj;
@@ -213,7 +244,7 @@ fn parse_select_stmt(l: &mut Lexer<'_>) -> Result<Node, Error> {
                         Token::TableAndColumnReference(t, c) => {
                             targets.push(Node::ColumnRef {
                                 alias: None,
-                                family: Some(t),
+                                table: Some(t),
                                 name: c,
                             });
                             break 'adj;
@@ -295,12 +326,12 @@ mod test {
                 targets: vec![
                     Node::ColumnRef {
                         alias: None,
-                        family: None,
+                        table: None,
                         name: "columna".into(),
                     },
                     Node::ColumnRef {
                         alias: None,
-                        family: Some("tablea".into()),
+                        table: Some("tablea".into()),
                         name: "columna".into(),
                     },
                 ],

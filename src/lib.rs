@@ -1,5 +1,6 @@
 pub mod grammar;
 pub mod parse;
+pub mod parse2;
 
 #[macro_export]
 macro_rules! next_tkn {
@@ -59,6 +60,8 @@ pub enum Token {
 
     TableAndColumnReference(String, String),
     TableOrColumnReference(String),
+
+    Eof,
 }
 
 impl Into<Token> for &str {
@@ -158,6 +161,25 @@ impl<'a> Lexer<'a> {
         }
 
         None
+    }
+
+    pub fn peek(&self) -> Token {
+        if self.src.is_empty() {
+            return Token::Eof;
+        }
+
+        let mut src = self.src;
+        while !self.src.is_empty() {
+            let s = chop(src);
+            if s.is_empty() {
+                src = &src[1..];
+                continue;
+            }
+
+            return s.into();
+        }
+
+        Token::Eof
     }
 
     pub fn to_vec(mut self) -> Vec<Token> {

@@ -70,6 +70,7 @@ pub enum State {
     TableOrColumnReference,
 
     Invalid,
+    Eof,
 }
 
 macro_rules! match_state {
@@ -132,7 +133,8 @@ impl PartialEq<State> for Token {
                 StringLiteral => (_),
                 IntegerLiteral => (_),
                 TableAndColumnReference => (_, _),
-                TableOrColumnReference => (_)
+                TableOrColumnReference => (_),
+                Eof
             ]
         )
     }

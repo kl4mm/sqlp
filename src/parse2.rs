@@ -740,43 +740,43 @@ mod test {
 
         let tcs = [
             Test {
-                input: "12 = 12;",
+                input: "12 = 12",
                 want: "(= 12 12)",
             },
             Test {
-                input: "12 < 14 AND 14 > 12;",
+                input: "12 < 14 AND 14 > 12",
                 want: "(AND (< 12 14) (> 14 12))",
             },
             Test {
-                input: "12 < 14 AND 14 > 12 OR name != \"bob\";",
+                input: "12 < 14 AND 14 > 12 OR name != \"bob\"",
                 want: "(OR (AND (< 12 14) (> 14 12)) (!= name \"bob\"))",
             },
             Test {
-                input: "NULL;",
+                input: "NULL",
                 want: "NULL",
             },
             Test {
-                input: "IS NULL;",
+                input: "IS NULL",
                 want: "(IS NULL)",
             },
             Test {
-                input: "NOT NULL;",
+                input: "NOT NULL",
                 want: "(NOT NULL)",
             },
             Test {
-                input: "NOT BETWEEN 100 AND 200;",
+                input: "NOT BETWEEN 100 AND 200",
                 want: "(NOT (BETWEEN 100 200))",
             },
             Test {
-                input: "NOT BETWEEN 100 AND 200 AND 1 < 2;",
+                input: "NOT BETWEEN 100 AND 200 AND 1 < 2",
                 want: "(AND (NOT (BETWEEN 100 200)) (< 1 2))",
             },
             Test {
-                input: "NOT IN (1, 2, 3, 4);",
+                input: "NOT IN (1, 2, 3, 4)",
                 want: "(NOT (IN 1 2 3 4))",
             },
             Test {
-                input: "NOT IN (1, 2, 3, 4) AND columna = columnb OR IN (6, 7, 8);",
+                input: "NOT IN (1, 2, 3, 4) AND columna = columnb OR IN (6, 7, 8)",
                 want: "(OR (AND (NOT (IN 1 2 3 4)) (= columna columnb)) (IN 6 7 8))",
             },
         ];

@@ -89,7 +89,7 @@ pub enum Node {
         limit: Option<u64>,
     },
 
-    Expr(Op, Vec<Node>), // Could just be type Op
+    Expr(Op, Vec<Node>),
 
     ColumnRef {
         table: Option<String>,
@@ -213,9 +213,16 @@ fn select(l: &mut Lexer) -> Result<Node> {
     loop {
         match l.peek() {
             Token::Join => {
+                // TODO: invalid if Where, Group, Order or Limit
+
                 joins.push(join_expr(l)?);
             }
-            Token::Where => todo!(),
+            Token::Where => {
+                // TODO: invalid if Group, Order or Limit
+
+                l.next();
+                where_expr = Some(Box::new(expr(l)?));
+            }
             Token::Group => todo!(),
             Token::Order => todo!(),
             _ => break, // `parens` will check RParen, `select` will check Semicolon
@@ -383,12 +390,6 @@ fn parens<T, F: Fn(&mut Lexer) -> Result<T>>(l: &mut Lexer, f: F) -> Result<T> {
     Ok(n)
 }
 
-fn where_expr(l: &mut Lexer) -> Result<Node> {
-    assert_eq!(l.next(), Token::Where);
-
-    expr(l)
-}
-
 fn expr(l: &mut Lexer) -> Result<Node> {
     fn expr_bp(l: &mut Lexer, min_bp: u8) -> Result<Node> {
         let mut lhs: Node = match l.next() {
@@ -407,16 +408,15 @@ fn expr(l: &mut Lexer) -> Result<Node> {
             Token::Null => Node::Null,
             t if is_prefix(&t) => {
                 let op = t.into();
-                if op == Op::Between {
-                    // Between is binary but its operator is prefix
-                    between(l)?
-                } else if op == Op::In {
-                    // In is n-ary but its operator is prefix
-                    Node::Expr(op, parens(l, list)?)
-                } else {
-                    let ((), r_bp) = prefix_bp(&op);
-                    let rhs = expr_bp(l, r_bp)?;
-                    Node::Expr(op, vec![rhs])
+                match op {
+                    Op::Between => between(l)?,
+                    Op::In => Node::Expr(op, parens(l, list)?),
+                    _ => {
+                        let ((), r_bp) = prefix_bp(&op);
+                        let rhs = expr_bp(l, r_bp)?;
+                        Node::Expr(op, vec![rhs]);
+                        unreachable!()
+                    }
                 }
             }
             t => Err(Unexpected(t))?,
@@ -469,7 +469,9 @@ fn between(l: &mut Lexer) -> Result<Node> {
 
 fn is_infix(t: &Token) -> bool {
     match t {
-        Token::Conjunction
+        Token::Negation
+        | Token::Is
+        | Token::Conjunction
         | Token::Disjunction
         | Token::Eq
         | Token::Neq
@@ -483,7 +485,7 @@ fn is_infix(t: &Token) -> bool {
 
 fn is_prefix(t: &Token) -> bool {
     match t {
-        Token::Negation | Token::In | Token::Between | Token::Is => true,
+        Token::Between | Token::In => true,
         _ => false,
     }
 }
@@ -492,13 +494,13 @@ fn infix_bp(op: &Op) -> (u8, u8) {
     match op {
         Op::Conjunction | Op::Disjunction => (1, 2),
         Op::Eq | Op::Neq | Op::Lt | Op::Le | Op::Gt | Op::Ge => (3, 4),
+        Op::Negation | Op::Is => (3, 4),
         _ => unreachable!(),
     }
 }
 
 fn prefix_bp(op: &Op) -> ((), u8) {
     match op {
-        Op::Negation | Op::Is => ((), 5),
         Op::In | Op::Between => unreachable!("IN and BETWEEN are parsed without binding power"),
         _ => unreachable!(),
     }
@@ -719,6 +721,28 @@ mod test {
                     limit: None,
                 },
             },
+            Test {
+                input: "select * from tablea where columna not null;",
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: Some(Box::new(Node::Expr(
+                        Op::Negation,
+                        vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None,
+                            },
+                            Node::Null,
+                        ],
+                    ))),
+                    group: None,
+                    order: None,
+                    joins: vec![],
+                    limit: None,
+                },
+            },
         ];
 
         for Test { input, want } in tcs {
@@ -756,28 +780,28 @@ mod test {
                 want: "NULL",
             },
             Test {
-                input: "IS NULL",
-                want: "(IS NULL)",
+                input: "columna IS NULL",
+                want: "(IS columna NULL)",
             },
             Test {
-                input: "NOT NULL",
-                want: "(NOT NULL)",
+                input: "columna NOT NULL",
+                want: "(NOT columna NULL)",
             },
             Test {
-                input: "NOT BETWEEN 100 AND 200",
-                want: "(NOT (BETWEEN 100 200))",
+                input: "columna NOT BETWEEN 100 AND 200",
+                want: "(NOT columna (BETWEEN 100 200))",
             },
             Test {
-                input: "NOT BETWEEN 100 AND 200 AND 1 < 2",
-                want: "(AND (NOT (BETWEEN 100 200)) (< 1 2))",
+                input: "columna NOT BETWEEN 100 AND 200 AND 1 < 2",
+                want: "(AND (NOT columna (BETWEEN 100 200)) (< 1 2))",
             },
             Test {
-                input: "NOT IN (1, 2, 3, 4)",
-                want: "(NOT (IN 1 2 3 4))",
+                input: "columna NOT IN (1, 2, 3, 4)",
+                want: "(NOT columna (IN 1 2 3 4))",
             },
             Test {
-                input: "NOT IN (1, 2, 3, 4) AND columna = columnb OR IN (6, 7, 8)",
-                want: "(OR (AND (NOT (IN 1 2 3 4)) (= columna columnb)) (IN 6 7 8))",
+                input: "columna NOT IN (1, 2, 3, 4) AND columna = columnb OR IN (6, 7, 8)",
+                want: "(OR (AND (NOT columna (IN 1 2 3 4)) (= columna columnb)) (IN 6 7 8))",
             },
         ];
 

@@ -81,11 +81,11 @@ impl From<Op> for Token {
 pub enum Node {
     Select {
         fields: Vec<Node>,
-        table_expr: Box<Node>,         // TableRef or Select
+        table: Box<Node>,              // TableRef or Select
         where_expr: Option<Box<Node>>, // Expr
-        group_expr: Option<Box<Node>>,
-        order_expr: Option<Box<Node>>,
-        join_expr: Option<Box<Node>>,
+        group: Option<Box<Node>>,
+        order: Option<Box<Node>>,
+        joins: Vec<Node>,
         limit: Option<u64>,
     },
 
@@ -123,11 +123,11 @@ impl std::fmt::Display for Node {
         match self {
             Node::Select {
                 fields,
-                table_expr,
+                table: table_expr,
                 where_expr,
-                group_expr,
-                order_expr,
-                join_expr,
+                group: group_expr,
+                order: order_expr,
+                joins: join_expr,
                 limit,
             } => todo!(),
             Node::Expr(operator, operands) => {
@@ -185,35 +185,52 @@ impl std::error::Error for Unexpected {}
 type Result<T> = std::result::Result<T, Unexpected>;
 
 pub fn query(l: &mut Lexer) -> Result<Node> {
-    match l.next() {
+    let q = match l.peek() {
         Token::Select => select(l),
-        t => Err(Unexpected(t))?,
+        t => Err(Unexpected(t)),
+    };
+
+    match l.next() {
+        Token::Semicolon => q,
+        t => Err(Unexpected(t)),
     }
 }
 
 fn select(l: &mut Lexer) -> Result<Node> {
-    let s = Node::Select {
-        fields: fields(l)?,
-        table_expr: Box::new(table_expr(l)?),
-        where_expr: None,
-        group_expr: None,
-        order_expr: None,
-        join_expr: None,
-        limit: None,
-    };
+    assert_eq!(l.next(), Token::Select);
 
+    let fields = fields(l)?;
+    assert_eq!(l.next(), Token::From);
+    let table = Box::new(table_expr(l)?);
+
+    let mut where_expr = None;
+    let mut group = None;
+    let mut order = None;
+    let mut joins = vec![];
+    let mut limit = None;
+
+    // Need to make sure each clause is parsed in the order in which they're allowed to appear
     loop {
         match l.peek() {
-            Token::Join => todo!(),
+            Token::Join => {
+                joins.push(join_expr(l)?);
+            }
             Token::Where => todo!(),
             Token::Group => todo!(),
             Token::Order => todo!(),
-            Token::Semicolon => break,
-            t => Err(Unexpected(t))?,
-        }
+            _ => break, // `parens` will check RParen, `select` will check Semicolon
+        };
     }
 
-    Ok(s)
+    Ok(Node::Select {
+        fields,
+        table,
+        where_expr,
+        group,
+        order,
+        joins,
+        limit,
+    })
 }
 
 fn fields(l: &mut Lexer) -> Result<Vec<Node>> {
@@ -322,10 +339,12 @@ fn column_ref(l: &mut Lexer) -> Result<Node> {
 }
 
 fn table_expr(l: &mut Lexer) -> Result<Node> {
-    assert_eq!(l.next(), Token::From);
-
-    match l.next() {
-        Token::TableOrColumnReference(table) => Ok(Node::TableRef(table)),
+    match l.peek() {
+        Token::TableOrColumnReference(table) => {
+            l.next();
+            Ok(Node::TableRef(table))
+        }
+        Token::LParen => parens(l, select),
         t => Err(Unexpected(t)), // TODO: parse select
     }
 }
@@ -333,10 +352,7 @@ fn table_expr(l: &mut Lexer) -> Result<Node> {
 fn join_expr(l: &mut Lexer) -> Result<Node> {
     assert_eq!(l.next(), Token::Join);
 
-    let table = match l.next() {
-        Token::TableOrColumnReference(table) => Box::new(Node::TableRef(table)),
-        t => Err(Unexpected(t))?,
-    };
+    let table = Box::new(table_expr(l)?);
 
     match l.next() {
         Token::Using => Ok(Node::JoinUsing {
@@ -345,7 +361,7 @@ fn join_expr(l: &mut Lexer) -> Result<Node> {
         }),
         Token::On => Ok(Node::JoinOn {
             table,
-            expr: Box::new(expr(l)?),
+            expr: Box::new(parens(l, expr)?),
         }),
         t => Err(Unexpected(t)),
     }
@@ -374,11 +390,6 @@ fn where_expr(l: &mut Lexer) -> Result<Node> {
 }
 
 fn expr(l: &mut Lexer) -> Result<Node> {
-    match l.peek() {
-        Token::LParen => return parens(l, expr),
-        _ => {}
-    };
-
     fn expr_bp(l: &mut Lexer, min_bp: u8) -> Result<Node> {
         let mut lhs: Node = match l.next() {
             Token::TableAndColumnReference(table, column) => Node::ColumnRef {
@@ -408,15 +419,16 @@ fn expr(l: &mut Lexer) -> Result<Node> {
                     Node::Expr(op, vec![rhs])
                 }
             }
-            // TODO: NOT expr (covered by prefix?)
             t => Err(Unexpected(t))?,
         };
 
         loop {
             let op = match l.peek() {
                 t if is_infix(&t) => t.into(),
-                Token::Semicolon => break,
-                t => Err(Unexpected(t))?,
+                // Token::Semicolon => break,
+                // Token::RParen => break, // Test this
+                _ => break,
+                // t => Err(Unexpected(t))?,
             };
 
             let (l_bp, r_bp) = infix_bp(&op);
@@ -508,11 +520,11 @@ mod test {
                 input: "select * from tablea;",
                 want: Node::Select {
                     fields: vec![Node::All],
-                    table_expr: Box::new(Node::TableRef("tablea".into())),
+                    table: Box::new(Node::TableRef("tablea".into())),
                     where_expr: None,
-                    group_expr: None,
-                    order_expr: None,
-                    join_expr: None,
+                    group: None,
+                    order: None,
+                    joins: vec![],
                     limit: None,
                 },
             },
@@ -531,11 +543,11 @@ mod test {
                             alias: None,
                         },
                     ],
-                    table_expr: Box::new(Node::TableRef("tablea".into())),
+                    table: Box::new(Node::TableRef("tablea".into())),
                     where_expr: None,
-                    group_expr: None,
-                    order_expr: None,
-                    join_expr: None,
+                    group: None,
+                    order: None,
+                    joins: vec![],
                     limit: None,
                 },
             },
@@ -559,11 +571,151 @@ mod test {
                             alias: None,
                         },
                     ],
-                    table_expr: Box::new(Node::TableRef("tablea".into())),
+                    table: Box::new(Node::TableRef("tablea".into())),
                     where_expr: None,
-                    group_expr: None,
-                    order_expr: None,
-                    join_expr: None,
+                    group: None,
+                    order: None,
+                    joins: vec![],
+                    limit: None,
+                },
+            },
+            Test {
+                input: "select * from tablea join tableb using (columna, columnb);",
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: None,
+                    group: None,
+                    order: None,
+                    joins: vec![Node::JoinUsing {
+                        table: Box::new(Node::TableRef("tableb".into())),
+                        columns: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None,
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None,
+                            },
+                        ],
+                    }],
+                    limit: None,
+                },
+            },
+            Test {
+                input: "select * from tablea join (select * from tableb) using (columna, columnb);",
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: None,
+                    group: None,
+                    order: None,
+                    joins: vec![Node::JoinUsing {
+                        table: Box::new(Node::Select {
+                            fields: vec![Node::All],
+                            table: Box::new(Node::TableRef("tableb".into())),
+                            where_expr: None,
+                            group: None,
+                            order: None,
+                            joins: vec![],
+                            limit: None,
+                        }),
+                        columns: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None,
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None,
+                            },
+                        ],
+                    }],
+                    limit: None,
+                },
+            },
+            Test {
+                input: "select * from tablea join tableb on (tablea.columna = tableb.columna);",
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: None,
+                    group: None,
+                    order: None,
+                    joins: vec![Node::JoinOn {
+                        table: Box::new(Node::TableRef("tableb".into())),
+                        expr: Box::new(Node::Expr(
+                            Op::Eq,
+                            vec![
+                                Node::ColumnRef {
+                                    table: Some("tablea".into()),
+                                    column: "columna".into(),
+                                    alias: None,
+                                },
+                                Node::ColumnRef {
+                                    table: Some("tableb".into()),
+                                    column: "columna".into(),
+                                    alias: None,
+                                },
+                            ],
+                        )),
+                    }],
+                    limit: None,
+                },
+            },
+            Test {
+                input: "select * from tablea
+                    join tableb on (tablea.columna = tableb.columna)
+                    join tablec on (tablea.columna = tablec.columna);",
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    where_expr: None,
+                    group: None,
+                    order: None,
+                    joins: vec![
+                        Node::JoinOn {
+                            table: Box::new(Node::TableRef("tableb".into())),
+                            expr: Box::new(Node::Expr(
+                                Op::Eq,
+                                vec![
+                                    Node::ColumnRef {
+                                        table: Some("tablea".into()),
+                                        column: "columna".into(),
+                                        alias: None,
+                                    },
+                                    Node::ColumnRef {
+                                        table: Some("tableb".into()),
+                                        column: "columna".into(),
+                                        alias: None,
+                                    },
+                                ],
+                            )),
+                        },
+                        Node::JoinOn {
+                            table: Box::new(Node::TableRef("tablec".into())),
+                            expr: Box::new(Node::Expr(
+                                Op::Eq,
+                                vec![
+                                    Node::ColumnRef {
+                                        table: Some("tablea".into()),
+                                        column: "columna".into(),
+                                        alias: None,
+                                    },
+                                    Node::ColumnRef {
+                                        table: Some("tablec".into()),
+                                        column: "columna".into(),
+                                        alias: None,
+                                    },
+                                ],
+                            )),
+                        },
+                    ],
                     limit: None,
                 },
             },
@@ -573,7 +725,7 @@ mod test {
             let mut l = Lexer::new(input);
             let have = query(&mut l)?;
 
-            assert!(want == have, "Want: {:?}\nHave: {:?}", want, have);
+            assert_eq!(want, have);
         }
 
         Ok(())

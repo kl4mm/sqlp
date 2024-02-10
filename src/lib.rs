@@ -361,7 +361,7 @@ mod test {
                     Token::Update,
                     Token::Comma,
                     Token::Delete,
-                     Token::Eof       
+                    Token::Eof
                 ],
             },
             TestCase {

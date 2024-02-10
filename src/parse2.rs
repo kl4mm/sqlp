@@ -81,10 +81,10 @@ impl From<Op> for Token {
 pub enum Node {
     Select {
         fields: Vec<Node>,
-        table: Box<Node>,              // TableRef or Select
-        where_expr: Option<Box<Node>>, // Expr
-        group: Option<Box<Node>>,
-        order: Option<Box<Node>>,
+        table: Box<Node>,           // TableRef or Select
+        r#where: Option<Box<Node>>, // Expr
+        group: Vec<Node>,
+        order: Vec<Node>,
         joins: Vec<Node>,
         limit: Option<u64>,
     },
@@ -123,11 +123,11 @@ impl std::fmt::Display for Node {
         match self {
             Node::Select {
                 fields,
-                table: table_expr,
-                where_expr,
-                group: group_expr,
-                order: order_expr,
-                joins: join_expr,
+                table,
+                r#where,
+                group,
+                order,
+                joins,
                 limit,
             } => todo!(),
             Node::Expr(operator, operands) => {
@@ -184,6 +184,15 @@ impl std::error::Error for Unexpected {}
 
 type Result<T> = std::result::Result<T, Unexpected>;
 
+macro_rules! check_next {
+    ($l:ident, $want:path) => {
+        match $l.next() {
+            $want => {}
+            t => Err(Unexpected(t))?,
+        }
+    };
+}
+
 pub fn query(l: &mut Lexer) -> Result<Node> {
     let q = match l.peek() {
         Token::Select => select(l),
@@ -203,28 +212,43 @@ fn select(l: &mut Lexer) -> Result<Node> {
     assert_eq!(l.next(), Token::From);
     let table = Box::new(table_expr(l)?);
 
-    let mut where_expr = None;
-    let mut group = None;
-    let mut order = None;
+    let mut r#where = None;
+    let mut group = vec![];
+    let mut order = vec![];
     let mut joins = vec![];
-    let mut limit = None;
+    let limit = None; // TODO
 
     // Need to make sure each clause is parsed in the order in which they're allowed to appear
     loop {
         match l.peek() {
             Token::Join => {
-                // TODO: invalid if Where, Group, Order or Limit
+                if r#where.is_some() || !group.is_empty() || !order.is_empty() || limit.is_some() {
+                    Err(Unexpected(l.next()))?
+                }
 
                 joins.push(join_expr(l)?);
             }
             Token::Where => {
-                // TODO: invalid if Group, Order or Limit
+                if r#where.is_some() || !group.is_empty() || !order.is_empty() || limit.is_some() {
+                    Err(Unexpected(l.next()))?
+                }
 
-                l.next();
-                where_expr = Some(Box::new(expr(l)?));
+                r#where = Some(Box::new(where_expr(l)?))
             }
-            Token::Group => todo!(),
-            Token::Order => todo!(),
+            Token::Group => {
+                if !group.is_empty() || !order.is_empty() || limit.is_some() {
+                    Err(Unexpected(l.next()))?
+                }
+
+                group = group_expr(l)?;
+            }
+            Token::Order => {
+                if !order.is_empty() || limit.is_some() {
+                    Err(Unexpected(l.next()))?
+                }
+
+                order = order_expr(l)?;
+            }
             _ => break, // `parens` will check RParen, `select` will check Semicolon
         };
     }
@@ -232,7 +256,7 @@ fn select(l: &mut Lexer) -> Result<Node> {
     Ok(Node::Select {
         fields,
         table,
-        where_expr,
+        r#where,
         group,
         order,
         joins,
@@ -357,7 +381,7 @@ fn table_expr(l: &mut Lexer) -> Result<Node> {
 }
 
 fn join_expr(l: &mut Lexer) -> Result<Node> {
-    assert_eq!(l.next(), Token::Join);
+    check_next!(l, Token::Join);
 
     let table = Box::new(table_expr(l)?);
 
@@ -374,18 +398,30 @@ fn join_expr(l: &mut Lexer) -> Result<Node> {
     }
 }
 
+fn where_expr(l: &mut Lexer) -> Result<Node> {
+    check_next!(l, Token::Where);
+
+    expr(l)
+}
+
+fn group_expr(l: &mut Lexer) -> Result<Vec<Node>> {
+    check_next!(l, Token::Group);
+    check_next!(l, Token::By);
+
+    column_list(l)
+}
+
+fn order_expr(l: &mut Lexer) -> Result<Vec<Node>> {
+    check_next!(l, Token::Order);
+    check_next!(l, Token::By);
+
+    column_list(l)
+}
+
 fn parens<T, F: Fn(&mut Lexer) -> Result<T>>(l: &mut Lexer, f: F) -> Result<T> {
-    match l.next() {
-        Token::LParen => {}
-        t => Err(Unexpected(t))?,
-    }
-
+    check_next!(l, Token::LParen);
     let n = f(l)?;
-
-    match l.next() {
-        Token::RParen => {}
-        t => Err(Unexpected(t))?,
-    }
+    check_next!(l, Token::RParen);
 
     Ok(n)
 }
@@ -425,10 +461,7 @@ fn expr(l: &mut Lexer) -> Result<Node> {
         loop {
             let op = match l.peek() {
                 t if is_infix(&t) => t.into(),
-                // Token::Semicolon => break,
-                // Token::RParen => break, // Test this
                 _ => break,
-                // t => Err(Unexpected(t))?,
             };
 
             let (l_bp, r_bp) = infix_bp(&op);
@@ -454,10 +487,7 @@ fn between(l: &mut Lexer) -> Result<Node> {
         t => Err(Unexpected(t))?,
     };
 
-    match l.next() {
-        Token::Conjunction => {}
-        t => Err(Unexpected(t))?,
-    };
+    check_next!(l, Token::Conjunction);
 
     let to = match l.next() {
         Token::IntegerLiteral(i) => Node::IntegerLiteral(i),
@@ -523,9 +553,9 @@ mod test {
                 want: Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: None,
-                    group: None,
-                    order: None,
+                    r#where: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![],
                     limit: None,
                 },
@@ -546,9 +576,9 @@ mod test {
                         },
                     ],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: None,
-                    group: None,
-                    order: None,
+                    r#where: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![],
                     limit: None,
                 },
@@ -574,9 +604,9 @@ mod test {
                         },
                     ],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: None,
-                    group: None,
-                    order: None,
+                    r#where: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![],
                     limit: None,
                 },
@@ -586,9 +616,9 @@ mod test {
                 want: Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: None,
-                    group: None,
-                    order: None,
+                    r#where: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![Node::JoinUsing {
                         table: Box::new(Node::TableRef("tableb".into())),
                         columns: vec![
@@ -612,16 +642,16 @@ mod test {
                 want: Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: None,
-                    group: None,
-                    order: None,
+                    r#where: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![Node::JoinUsing {
                         table: Box::new(Node::Select {
                             fields: vec![Node::All],
                             table: Box::new(Node::TableRef("tableb".into())),
-                            where_expr: None,
-                            group: None,
-                            order: None,
+                            r#where: None,
+                            group: vec![],
+                            order: vec![],
                             joins: vec![],
                             limit: None,
                         }),
@@ -646,9 +676,9 @@ mod test {
                 want: Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: None,
-                    group: None,
-                    order: None,
+                    r#where: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![Node::JoinOn {
                         table: Box::new(Node::TableRef("tableb".into())),
                         expr: Box::new(Node::Expr(
@@ -677,9 +707,9 @@ mod test {
                 want: Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: None,
-                    group: None,
-                    order: None,
+                    r#where: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![
                         Node::JoinOn {
                             table: Box::new(Node::TableRef("tableb".into())),
@@ -726,7 +756,7 @@ mod test {
                 want: Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
-                    where_expr: Some(Box::new(Node::Expr(
+                    r#where: Some(Box::new(Node::Expr(
                         Op::Negation,
                         vec![
                             Node::ColumnRef {
@@ -737,9 +767,113 @@ mod test {
                             Node::Null,
                         ],
                     ))),
-                    group: None,
-                    order: None,
+                    group: vec![],
+                    order: vec![],
                     joins: vec![],
+                    limit: None,
+                },
+            },
+            Test {
+                input: "select * from tablea where columna not null group by columna, columnb order by columnb;",
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    r#where: Some(Box::new(Node::Expr(
+                        Op::Negation,
+                        vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None,
+                            },
+                            Node::Null,
+                        ],
+                    ))),
+                    group: vec![
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columna".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnb".into(),
+                            alias: None
+                        }
+                    ],
+                    order: vec![Node::ColumnRef { table: None, column: "columnb".into(), alias: None }],
+                    joins: vec![],
+                    limit: None,
+                },
+            },
+            Test {
+                input: "select * from tablea
+                    join tableb using (columna)
+                    where columna > 1000 and columnb not in (1, 2, 3, 4)
+                    group by columna, columnb
+                    order by columnb;",
+                want: Node::Select {
+                    fields: vec![Node::All],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    r#where: Some(Box::new(Node::Expr(
+                                Op::Conjunction,
+                                vec![
+                                    Node::Expr(
+                                        Op::Gt,
+                                        vec![
+                                            Node::ColumnRef {
+                                                table: None,
+                                                column: "columna".into(),
+                                                alias: None
+                                            },
+                                            Node::IntegerLiteral(1000)
+                                        ]),
+                                    Node::Expr(
+                                        Op::Negation,
+                                        vec![
+                                            Node::ColumnRef {
+                                                table: None,
+                                                column: "columnb".into(),
+                                                alias: None
+                                            },
+                                            Node::Expr(
+                                                Op::In,
+                                                vec![
+                                                    Node::IntegerLiteral(1),
+                                                    Node::IntegerLiteral(2),
+                                                    Node::IntegerLiteral(3),
+                                                    Node::IntegerLiteral(4)
+                                                ]
+                                            )
+                                        ]
+                                    )
+                                ]
+                            ))),
+                    group: vec![
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columna".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnb".into(),
+                            alias: None
+                        }
+                    ],
+                    order: vec![Node::ColumnRef { table: None, column: "columnb".into(), alias: None }],
+                    joins: vec![
+                        Node::JoinUsing {
+                            table: Box::new(Node::TableRef("tableb".into())),
+                            columns: vec![
+                                Node::ColumnRef {
+                                    table: None,
+                                    column: "columna".into(),
+                                    alias: None
+                                }
+                            ]
+                        }
+                    ],
                     limit: None,
                 },
             },

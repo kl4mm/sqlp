@@ -356,6 +356,65 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_parse_expr() -> Result<()> {
+        struct Test {
+            input: &'static str,
+            want: &'static str,
+        }
+
+        let tcs = [
+            Test {
+                input: "12 = 12",
+                want: "(= 12 12)",
+            },
+            Test {
+                input: "12 < 14 AND 14 > 12",
+                want: "(AND (< 12 14) (> 14 12))",
+            },
+            Test {
+                input: "12 < 14 AND 14 > 12 OR name != \"bob\"",
+                want: "(OR (AND (< 12 14) (> 14 12)) (!= name \"bob\"))",
+            },
+            Test {
+                input: "NULL",
+                want: "NULL",
+            },
+            Test {
+                input: "columna IS NULL",
+                want: "(IS columna NULL)",
+            },
+            Test {
+                input: "columna NOT NULL",
+                want: "(NOT columna NULL)",
+            },
+            Test {
+                input: "columna NOT BETWEEN 100 AND 200",
+                want: "(NOT columna (BETWEEN 100 200))",
+            },
+            Test {
+                input: "columna NOT BETWEEN 100 AND 200 AND 1 < 2",
+                want: "(AND (NOT columna (BETWEEN 100 200)) (< 1 2))",
+            },
+            Test {
+                input: "columna NOT IN (1, 2, 3, 4)",
+                want: "(NOT columna (IN 1 2 3 4))",
+            },
+            Test {
+                input: "columna NOT IN (1, 2, 3, 4) AND columna = columnb OR IN (6, 7, 8)",
+                want: "(OR (AND (NOT columna (IN 1 2 3 4)) (= columna columnb)) (IN 6 7 8))",
+            },
+        ];
+
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = expr(&mut l)?.to_string();
+            assert_eq!(want, have);
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_select() -> Result<()> {
         struct Test {
             input: &'static str,
@@ -699,65 +758,6 @@ mod test {
             let mut l = Lexer::new(input);
             let have = select(&mut l)?;
 
-            assert_eq!(want, have);
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_expr() -> Result<()> {
-        struct Test {
-            input: &'static str,
-            want: &'static str,
-        }
-
-        let tcs = [
-            Test {
-                input: "12 = 12",
-                want: "(= 12 12)",
-            },
-            Test {
-                input: "12 < 14 AND 14 > 12",
-                want: "(AND (< 12 14) (> 14 12))",
-            },
-            Test {
-                input: "12 < 14 AND 14 > 12 OR name != \"bob\"",
-                want: "(OR (AND (< 12 14) (> 14 12)) (!= name \"bob\"))",
-            },
-            Test {
-                input: "NULL",
-                want: "NULL",
-            },
-            Test {
-                input: "columna IS NULL",
-                want: "(IS columna NULL)",
-            },
-            Test {
-                input: "columna NOT NULL",
-                want: "(NOT columna NULL)",
-            },
-            Test {
-                input: "columna NOT BETWEEN 100 AND 200",
-                want: "(NOT columna (BETWEEN 100 200))",
-            },
-            Test {
-                input: "columna NOT BETWEEN 100 AND 200 AND 1 < 2",
-                want: "(AND (NOT columna (BETWEEN 100 200)) (< 1 2))",
-            },
-            Test {
-                input: "columna NOT IN (1, 2, 3, 4)",
-                want: "(NOT columna (IN 1 2 3 4))",
-            },
-            Test {
-                input: "columna NOT IN (1, 2, 3, 4) AND columna = columnb OR IN (6, 7, 8)",
-                want: "(OR (AND (NOT columna (IN 1 2 3 4)) (= columna columnb)) (IN 6 7 8))",
-            },
-        ];
-
-        for Test { input, want } in tcs {
-            let mut l = Lexer::new(input);
-            let have = expr(&mut l)?.to_string();
             assert_eq!(want, have);
         }
 

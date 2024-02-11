@@ -104,15 +104,6 @@ pub enum Node {
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Node::Select {
-                fields,
-                table,
-                r#where,
-                group,
-                order,
-                joins,
-                limit,
-            } => todo!(),
             Node::Expr(operator, operands) => {
                 write!(f, "({}", operator)?;
                 for o in operands {
@@ -126,7 +117,7 @@ impl std::fmt::Display for Node {
                 alias,
             } => {
                 if table.is_some() {
-                    write!(f, "{}", table.as_ref().unwrap())?;
+                    write!(f, "{}.", table.as_ref().unwrap())?;
                 }
 
                 write!(f, "{column}")?;
@@ -138,13 +129,22 @@ impl std::fmt::Display for Node {
                 Ok(())
             }
             Node::TableRef(t) => write!(f, "{t}"),
-            Node::JoinUsing { table, columns } => todo!(),
-            Node::JoinOn { table, expr } => todo!(),
+            Node::JoinUsing { table, columns } => {
+                write!(f, "JOIN {table} USING (")?;
+                for c in columns {
+                    write!(f, " {c}")?;
+                }
+                write!(f, ")")
+            }
+            Node::JoinOn { table, expr } => {
+                write!(f, "JOIN {table} ON {expr}")
+            }
             Node::StringLiteral(s) => write!(f, "\"{s}\""),
             Node::IntegerLiteral(i) => write!(f, "{i}"),
-            Node::All => write!(f, "*"),
+            Node::All => write!(f, "ALL"),
             Node::Null => write!(f, "NULL"),
-            Node::None => todo!(),
+            Node::None => write!(f, "NONE"),
+            _ => unimplemented!(),
         }
     }
 }

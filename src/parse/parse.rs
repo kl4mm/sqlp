@@ -691,39 +691,39 @@ mod test {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: Some(Box::new(Node::Expr(
-                                Op::Conjunction,
+                        Op::Conjunction,
+                        vec![
+                            Node::Expr(
+                                Op::Gt,
                                 vec![
+                                    Node::ColumnRef {
+                                        table: None,
+                                        column: "columna".into(),
+                                        alias: None
+                                    },
+                                    Node::IntegerLiteral(1000)
+                                ]),
+                            Node::Expr(
+                                Op::Negation,
+                                vec![
+                                    Node::ColumnRef {
+                                        table: None,
+                                        column: "columnb".into(),
+                                        alias: None
+                                    },
                                     Node::Expr(
-                                        Op::Gt,
+                                        Op::In,
                                         vec![
-                                            Node::ColumnRef {
-                                                table: None,
-                                                column: "columna".into(),
-                                                alias: None
-                                            },
-                                            Node::IntegerLiteral(1000)
-                                        ]),
-                                    Node::Expr(
-                                        Op::Negation,
-                                        vec![
-                                            Node::ColumnRef {
-                                                table: None,
-                                                column: "columnb".into(),
-                                                alias: None
-                                            },
-                                            Node::Expr(
-                                                Op::In,
-                                                vec![
-                                                    Node::IntegerLiteral(1),
-                                                    Node::IntegerLiteral(2),
-                                                    Node::IntegerLiteral(3),
-                                                    Node::IntegerLiteral(4)
-                                                ]
-                                            )
+                                            Node::IntegerLiteral(1),
+                                            Node::IntegerLiteral(2),
+                                            Node::IntegerLiteral(3),
+                                            Node::IntegerLiteral(4)
                                         ]
                                     )
                                 ]
-                            ))),
+                            )
+                        ]
+                    ))),
                     group: vec![
                         Node::ColumnRef {
                             table: None,

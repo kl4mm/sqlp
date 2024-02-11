@@ -58,25 +58,6 @@ impl From<Token> for Op {
     }
 }
 
-impl From<Op> for Token {
-    fn from(o: Op) -> Self {
-        match o {
-            Op::Eq => Token::Eq,
-            Op::Neq => Token::Neq,
-            Op::Lt => Token::Lt,
-            Op::Le => Token::Le,
-            Op::Gt => Token::Gt,
-            Op::Ge => Token::Ge,
-            Op::Conjunction => Token::Conjunction,
-            Op::Disjunction => Token::Disjunction,
-            Op::Negation => Token::Negation,
-            Op::In => Token::In,
-            Op::Between => Token::Between,
-            Op::Is => Token::Is,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Node {
     Select {

@@ -67,7 +67,7 @@ pub enum Node {
         group: Vec<Node>,
         order: Vec<Node>,
         joins: Vec<Node>,
-        limit: Option<u64>,
+        limit: Option<Box<Node>>,
     },
 
     Expr(Op, Vec<Node>),
@@ -197,7 +197,7 @@ fn select(l: &mut Lexer) -> Result<Node> {
     let mut group = vec![];
     let mut order = vec![];
     let mut joins = vec![];
-    let limit = None; // TODO
+    let mut limit = None;
 
     // Need to make sure each clause is parsed in the order in which they're allowed to appear
     loop {
@@ -229,6 +229,13 @@ fn select(l: &mut Lexer) -> Result<Node> {
                 }
 
                 order = order_expr(l)?;
+            }
+            Token::Limit => {
+                if limit.is_some() {
+                    Err(Unexpected(l.next()))?
+                }
+
+                limit = Some(Box::new(limit_expr(l)?));
             }
             _ => break, // `parens` will check RParen, `select` will check Semicolon
         };
@@ -397,6 +404,15 @@ fn order_expr(l: &mut Lexer) -> Result<Vec<Node>> {
     check_next!(l, Token::By);
 
     column_list(l)
+}
+
+fn limit_expr(l: &mut Lexer) -> Result<Node> {
+    check_next!(l, Token::Limit);
+
+    match l.next() {
+        Token::IntegerLiteral(i) => Ok(Node::IntegerLiteral(i)),
+        t => Err(Unexpected(t)),
+    }
 }
 
 fn parens<T, F: Fn(&mut Lexer) -> Result<T>>(l: &mut Lexer, f: F) -> Result<T> {
@@ -792,7 +808,8 @@ mod test {
                     join tableb using (columna)
                     where columna > 1000 and columnb not in (1, 2, 3, 4)
                     group by columna, columnb
-                    order by columnb;",
+                    order by columnb
+                    limit 100;",
                 want: Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
@@ -855,7 +872,7 @@ mod test {
                             ]
                         }
                     ],
-                    limit: None,
+                    limit: Some(Box::new(Node::IntegerLiteral(100))),
                 },
             },
         ];

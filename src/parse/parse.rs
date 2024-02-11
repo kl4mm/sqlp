@@ -8,7 +8,7 @@ use crate::{
 pub fn select(l: &mut Lexer) -> Result<Node> {
     assert_eq!(l.next(), Token::Select);
 
-    let fields = fields(l)?;
+    let columns = fields(l)?;
     assert_eq!(l.next(), Token::From);
     let table = Box::new(table_expr(l)?);
 
@@ -60,13 +60,38 @@ pub fn select(l: &mut Lexer) -> Result<Node> {
     }
 
     Ok(Node::Select {
-        fields,
+        columns,
         table,
         r#where,
         group,
         order,
         joins,
         limit,
+    })
+}
+
+pub fn insert(l: &mut Lexer) -> Result<Node> {
+    check_next!(l, Token::Insert);
+    check_next!(l, Token::Into);
+
+    let table = match l.next() {
+        Token::TableOrColumnReference(table) => Box::new(Node::TableRef(table)),
+        t => Err(Unexpected(t))?,
+    };
+
+    let columns = match l.peek() {
+        Token::LParen => parens(l, column_list)?,
+        _ => vec![],
+    };
+
+    check_next!(l, Token::Values);
+
+    let inserts = list_list(l, parens2(list))?;
+
+    Ok(Node::Insert {
+        columns,
+        table,
+        inserts,
     })
 }
 
@@ -116,33 +141,21 @@ fn list(l: &mut Lexer) -> Result<Vec<Node>> {
         Item,
     }
 
-    fn integer_list(l: &mut Lexer, mut list: Vec<Node>, state: State) -> Result<Vec<Node>> {
+    fn _list(l: &mut Lexer, mut list: Vec<Node>, state: State) -> Result<Vec<Node>> {
         match l.peek() {
             Token::Comma if state == State::Comma => {
                 l.next();
-                integer_list(l, list, State::Item)
-            }
-            Token::IntegerLiteral(i) if state == State::Item => {
-                l.next();
-                list.push(Node::IntegerLiteral(i));
-                integer_list(l, list, State::Comma)
-            }
-
-            _ if state == State::Comma => return Ok(list),
-            t => Err(Unexpected(t)),
-        }
-    }
-
-    fn string_list(l: &mut Lexer, mut list: Vec<Node>, state: State) -> Result<Vec<Node>> {
-        match l.peek() {
-            Token::Comma if state == State::Comma => {
-                l.next();
-                string_list(l, list, State::Item)
+                _list(l, list, State::Item)
             }
             Token::StringLiteral(s) if state == State::Item => {
                 l.next();
                 list.push(Node::StringLiteral(s));
-                string_list(l, list, State::Comma)
+                _list(l, list, State::Comma)
+            }
+            Token::IntegerLiteral(i) if state == State::Item => {
+                l.next();
+                list.push(Node::IntegerLiteral(i));
+                _list(l, list, State::Comma)
             }
 
             _ if state == State::Comma => return Ok(list),
@@ -150,11 +163,36 @@ fn list(l: &mut Lexer) -> Result<Vec<Node>> {
         }
     }
 
-    match l.peek() {
-        Token::IntegerLiteral(_) => integer_list(l, Vec::new(), State::Item),
-        Token::StringLiteral(_) => string_list(l, Vec::new(), State::Item),
-        t => Err(Unexpected(t)),
+    _list(l, Vec::new(), State::Item)
+}
+
+fn list_list<T, F: Fn(&mut Lexer) -> Result<Vec<T>>>(l: &mut Lexer, f: F) -> Result<Vec<Vec<T>>> {
+    #[derive(PartialEq, Debug)]
+    enum State {
+        Comma,
+        Item,
     }
+
+    fn list_list<T, F: Fn(&mut Lexer) -> Result<Vec<T>>>(
+        l: &mut Lexer,
+        f: F,
+        mut list: Vec<Vec<T>>,
+        state: State,
+    ) -> Result<Vec<Vec<T>>> {
+        match l.peek() {
+            Token::Comma if state == State::Comma => {
+                l.next();
+                list_list(l, f, list, State::Item)
+            }
+            _ if state == State::Comma => return Ok(list),
+            _ => {
+                list.push(f(l)?);
+                list_list(l, f, list, State::Comma)
+            }
+        }
+    }
+
+    list_list(l, f, Vec::new(), State::Item)
 }
 
 fn column_ref(l: &mut Lexer) -> Result<Node> {
@@ -182,7 +220,7 @@ fn table_expr(l: &mut Lexer) -> Result<Node> {
             Ok(Node::TableRef(table))
         }
         Token::LParen => parens(l, select),
-        t => Err(Unexpected(t)), // TODO: parse select
+        t => Err(Unexpected(t)),
     }
 }
 
@@ -239,6 +277,16 @@ fn parens<T, F: Fn(&mut Lexer) -> Result<T>>(l: &mut Lexer, f: F) -> Result<T> {
     check_next!(l, Token::RParen);
 
     Ok(n)
+}
+
+fn parens2<T>(f: impl Fn(&mut Lexer) -> Result<T>) -> impl Fn(&mut Lexer) -> Result<T> {
+    move |l: &mut Lexer| -> Result<T> {
+        check_next!(l, Token::LParen);
+        let n = f(l)?;
+        check_next!(l, Token::RParen);
+
+        Ok(n)
+    }
 }
 
 fn expr(l: &mut Lexer) -> Result<Node> {
@@ -414,18 +462,18 @@ mod test {
         Ok(())
     }
 
+    struct Test {
+        input: &'static str,
+        want: Result<Node>,
+    }
+
     #[test]
     fn test_parse_select() -> Result<()> {
-        struct Test {
-            input: &'static str,
-            want: Result<Node>,
-        }
-
         let tcs = [
             Test {
                 input: "select * from tablea;",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
                     group: vec![],
@@ -437,7 +485,7 @@ mod test {
             Test {
                 input: "select columna, columnb from tablea;",
                 want: Ok(Node::Select {
-                    fields: vec![
+                    columns: vec![
                         Node::ColumnRef {
                             table: None,
                             column: "columna".into(),
@@ -460,7 +508,7 @@ mod test {
             Test {
                 input: "select columna, columnb, columnc from tablea;",
                 want: Ok(Node::Select {
-                    fields: vec![
+                    columns: vec![
                         Node::ColumnRef {
                             table: None,
                             column: "columna".into(),
@@ -488,7 +536,7 @@ mod test {
             Test {
                 input: "select * from tablea join tableb using (columna, columnb);",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
                     group: vec![],
@@ -514,14 +562,14 @@ mod test {
             Test {
                 input: "select * from tablea join (select * from tableb) using (columna, columnb);",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
                     group: vec![],
                     order: vec![],
                     joins: vec![Node::JoinUsing {
                         table: Box::new(Node::Select {
-                            fields: vec![Node::All],
+                            columns: vec![Node::All],
                             table: Box::new(Node::TableRef("tableb".into())),
                             r#where: None,
                             group: vec![],
@@ -548,7 +596,7 @@ mod test {
             Test {
                 input: "select * from tablea join tableb on (tablea.columna = tableb.columna);",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
                     group: vec![],
@@ -579,7 +627,7 @@ mod test {
                     join tableb on (tablea.columna = tableb.columna)
                     join tablec on (tablea.columna = tablec.columna);",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
                     group: vec![],
@@ -628,7 +676,7 @@ mod test {
             Test {
                 input: "select * from tablea where columna not null;",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: Some(Box::new(Node::Expr(
                         Op::Negation,
@@ -650,7 +698,7 @@ mod test {
             Test {
                 input: "select * from tablea where columna not null group by columna, columnb order by columnb;",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: Some(Box::new(Node::Expr(
                         Op::Negation,
@@ -688,7 +736,7 @@ mod test {
                     order by columnb
                     limit 100;",
                 want: Ok(Node::Select {
-                    fields: vec![Node::All],
+                    columns: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: Some(Box::new(Node::Expr(
                         Op::Conjunction,
@@ -783,12 +831,118 @@ mod test {
             Test {
                 input: "select , columna, columnb from tablea;",
                 want: Err(Unexpected(Token::Comma)),
-            }
+            },
         ];
 
         for Test { input, want } in tcs {
             let mut l = Lexer::new(input);
             let have = select(&mut l);
+
+            assert_eq!(want, have);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_insert() -> Result<()> {
+        let tcs = [
+            Test {
+                input: "insert into tablea values (\"test\", 1, \"insert\", 2);",
+                want: Ok(Node::Insert {
+                    columns: vec![],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    inserts: vec![vec![
+                        Node::StringLiteral("test".into()),
+                        Node::IntegerLiteral(1),
+                        Node::StringLiteral("insert".into()),
+                        Node::IntegerLiteral(2),
+                    ]],
+                })
+            },
+            Test {
+                input: "insert into tablea (columna, columnb, columnc, columnd) values (\"test\", 1, \"insert\", 2);",
+                want: Ok(Node::Insert {
+                    columns: vec![
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columna".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnb".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnc".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnd".into(),
+                            alias: None
+                        },
+                    ],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    inserts: vec![vec![
+                        Node::StringLiteral("test".into()),
+                        Node::IntegerLiteral(1),
+                        Node::StringLiteral("insert".into()),
+                        Node::IntegerLiteral(2),
+                    ]],
+                })
+            },
+            Test {
+                input: "insert into tablea (columna, columnb, columnc, columnd)
+                    values (\"test\", 1, \"insert\", 2),
+                    (\"insert\", 2, \"test\", 1);",
+                want: Ok(Node::Insert {
+                    columns: vec![
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columna".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnb".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnc".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnd".into(),
+                            alias: None
+                        },
+                    ],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    inserts: vec![
+                        vec![
+                            Node::StringLiteral("test".into()),
+                            Node::IntegerLiteral(1),
+                            Node::StringLiteral("insert".into()),
+                            Node::IntegerLiteral(2),
+                        ],
+                        vec![
+                            Node::StringLiteral("insert".into()),
+                            Node::IntegerLiteral(2),
+                            Node::StringLiteral("test".into()),
+                            Node::IntegerLiteral(1),
+                        ]
+                    ],
+                })
+            }
+        ];
+
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = insert(&mut l);
 
             assert_eq!(want, have);
         }

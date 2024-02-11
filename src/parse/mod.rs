@@ -63,13 +63,19 @@ impl From<Token> for Op {
 #[derive(Debug, PartialEq)]
 pub enum Node {
     Select {
-        fields: Vec<Node>,
+        columns: Vec<Node>,
         table: Box<Node>,           // TableRef or Select
         r#where: Option<Box<Node>>, // Expr
         group: Vec<Node>,
         order: Vec<Node>,
         joins: Vec<Node>,
         limit: Option<Box<Node>>,
+    },
+
+    Insert {
+        columns: Vec<Node>,
+        table: Box<Node>,
+        inserts: Vec<Vec<Node>>,
     },
 
     Expr(Op, Vec<Node>),
@@ -181,6 +187,7 @@ macro_rules! check_next {
 pub fn query(l: &mut Lexer) -> Result<Node> {
     let q = match l.peek() {
         Token::Select => self::parse::select(l),
+        Token::Insert => self::parse::insert(l),
         t => Err(Unexpected(t)),
     };
 

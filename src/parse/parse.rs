@@ -418,13 +418,13 @@ mod test {
     fn test_parse_select() -> Result<()> {
         struct Test {
             input: &'static str,
-            want: Node,
+            want: Result<Node>,
         }
 
         let tcs = [
             Test {
                 input: "select * from tablea;",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
@@ -432,11 +432,11 @@ mod test {
                     order: vec![],
                     joins: vec![],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select columna, columnb from tablea;",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![
                         Node::ColumnRef {
                             table: None,
@@ -455,11 +455,11 @@ mod test {
                     order: vec![],
                     joins: vec![],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select columna, columnb, columnc from tablea;",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![
                         Node::ColumnRef {
                             table: None,
@@ -483,11 +483,11 @@ mod test {
                     order: vec![],
                     joins: vec![],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select * from tablea join tableb using (columna, columnb);",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
@@ -509,11 +509,11 @@ mod test {
                         ],
                     }],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select * from tablea join (select * from tableb) using (columna, columnb);",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
@@ -543,11 +543,11 @@ mod test {
                         ],
                     }],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select * from tablea join tableb on (tablea.columna = tableb.columna);",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
@@ -572,13 +572,13 @@ mod test {
                         )),
                     }],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select * from tablea
                     join tableb on (tablea.columna = tableb.columna)
                     join tablec on (tablea.columna = tablec.columna);",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: None,
@@ -623,11 +623,11 @@ mod test {
                         },
                     ],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select * from tablea where columna not null;",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: Some(Box::new(Node::Expr(
@@ -645,11 +645,11 @@ mod test {
                     order: vec![],
                     joins: vec![],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select * from tablea where columna not null group by columna, columnb order by columnb;",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: Some(Box::new(Node::Expr(
@@ -678,7 +678,7 @@ mod test {
                     order: vec![Node::ColumnRef { table: None, column: "columnb".into(), alias: None }],
                     joins: vec![],
                     limit: None,
-                },
+                }),
             },
             Test {
                 input: "select * from tablea
@@ -687,7 +687,7 @@ mod test {
                     group by columna, columnb
                     order by columnb
                     limit 100;",
-                want: Node::Select {
+                want: Ok(Node::Select {
                     fields: vec![Node::All],
                     table: Box::new(Node::TableRef("tablea".into())),
                     r#where: Some(Box::new(Node::Expr(
@@ -750,13 +750,45 @@ mod test {
                         }
                     ],
                     limit: Some(Box::new(Node::IntegerLiteral(100))),
-                },
+                }),
             },
+            Test {
+                input: "select * from tablea where columna > 1000 join tableb using (columna);",
+                want: Err(Unexpected(Token::Join)),
+            },
+            Test {
+                input: "select * from tablea join tableb using (columna) group by columna join tableb using (columna);",
+                want: Err(Unexpected(Token::Join)),
+            },
+            Test {
+                input: "select * from tablea join tableb using (columna) group by columna order by columna join tableb using (columna);",
+                want: Err(Unexpected(Token::Join)),
+            },
+            Test {
+                input: "select * from tablea join tableb using (columna) order by columna group by columna;",
+                want: Err(Unexpected(Token::Group)),
+            },
+            Test {
+                input: "select * from tablea join tableb using (columna) limit 100 group by columna;",
+                want: Err(Unexpected(Token::Group)),
+            },
+            Test {
+                input: "select columna, columnb, from tablea;",
+                want: Err(Unexpected(Token::From)),
+            },
+            Test {
+                input: "select columna, * from tablea;",
+                want: Err(Unexpected(Token::All)),
+            },
+            Test {
+                input: "select , columna, columnb from tablea;",
+                want: Err(Unexpected(Token::Comma)),
+            }
         ];
 
         for Test { input, want } in tcs {
             let mut l = Lexer::new(input);
-            let have = select(&mut l)?;
+            let have = select(&mut l);
 
             assert_eq!(want, have);
         }

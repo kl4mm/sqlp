@@ -149,6 +149,7 @@ impl std::fmt::Display for Node {
     }
 }
 
+#[derive(PartialEq)]
 pub struct Unexpected(Token);
 
 impl std::fmt::Display for Unexpected {

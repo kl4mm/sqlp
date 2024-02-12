@@ -80,13 +80,13 @@ pub fn insert(l: &mut Lexer) -> Result<Node> {
     };
 
     let columns = match l.peek() {
-        Token::LParen => parens(l, column_list)?,
+        Token::LParen => parens(column_list)(l)?,
         _ => vec![],
     };
 
     check_next!(l, Token::Values);
 
-    let inserts = list_list(l, parens2(list))?;
+    let inserts = list(parens(list(literal)))(l)?;
 
     Ok(Node::Insert {
         columns,
@@ -134,36 +134,37 @@ fn column_list(l: &mut Lexer) -> Result<Vec<Node>> {
     column_list(l, Vec::new(), State::Column)
 }
 
-fn list(l: &mut Lexer) -> Result<Vec<Node>> {
-    #[derive(PartialEq, Debug)]
-    enum State {
-        Comma,
-        Item,
-    }
-
-    fn _list(l: &mut Lexer, mut list: Vec<Node>, state: State) -> Result<Vec<Node>> {
-        match l.peek() {
-            Token::Comma if state == State::Comma => {
-                l.next();
-                _list(l, list, State::Item)
-            }
-            Token::StringLiteral(s) if state == State::Item => {
-                l.next();
-                list.push(Node::StringLiteral(s));
-                _list(l, list, State::Comma)
-            }
-            Token::IntegerLiteral(i) if state == State::Item => {
-                l.next();
-                list.push(Node::IntegerLiteral(i));
-                _list(l, list, State::Comma)
-            }
-
-            _ if state == State::Comma => return Ok(list),
-            t => Err(Unexpected(t)),
+fn list<T>(
+    f: impl Fn(&mut Lexer) -> Result<T> + Copy,
+) -> impl Fn(&mut Lexer) -> Result<Vec<T>> + Copy {
+    move |l: &mut Lexer| -> Result<Vec<T>> {
+        #[derive(PartialEq, Debug)]
+        enum State {
+            Comma,
+            Item,
         }
-    }
 
-    _list(l, Vec::new(), State::Item)
+        fn _list<T>(
+            l: &mut Lexer,
+            f: impl Fn(&mut Lexer) -> Result<T>,
+            mut list: Vec<T>,
+            state: State,
+        ) -> Result<Vec<T>> {
+            match l.peek() {
+                Token::Comma if state == State::Comma => {
+                    l.next();
+                    _list(l, f, list, State::Item)
+                }
+                _ if state == State::Comma => return Ok(list),
+                _ => {
+                    list.push(f(l)?);
+                    _list(l, f, list, State::Comma)
+                }
+            }
+        }
+
+        _list(l, f, Vec::new(), State::Item)
+    }
 }
 
 #[allow(unused)]
@@ -179,35 +180,6 @@ fn literal(l: &mut Lexer) -> Result<Node> {
         }
         t => Err(Unexpected(t)),
     }
-}
-
-fn list_list<T, F: Fn(&mut Lexer) -> Result<T>>(l: &mut Lexer, f: F) -> Result<Vec<T>> {
-    #[derive(PartialEq, Debug)]
-    enum State {
-        Comma,
-        Item,
-    }
-
-    fn list_list<T>(
-        l: &mut Lexer,
-        f: impl Fn(&mut Lexer) -> Result<T>,
-        mut list: Vec<T>,
-        state: State,
-    ) -> Result<Vec<T>> {
-        match l.peek() {
-            Token::Comma if state == State::Comma => {
-                l.next();
-                list_list(l, f, list, State::Item)
-            }
-            _ if state == State::Comma => return Ok(list),
-            _ => {
-                list.push(f(l)?);
-                list_list(l, f, list, State::Comma)
-            }
-        }
-    }
-
-    list_list(l, f, Vec::new(), State::Item)
 }
 
 fn column_ref(l: &mut Lexer) -> Result<Node> {
@@ -234,7 +206,7 @@ fn table_expr(l: &mut Lexer) -> Result<Node> {
             l.next();
             Ok(Node::TableRef(table))
         }
-        Token::LParen => parens(l, select),
+        Token::LParen => parens(select)(l),
         t => Err(Unexpected(t)),
     }
 }
@@ -247,11 +219,11 @@ fn join_expr(l: &mut Lexer) -> Result<Node> {
     match l.next() {
         Token::Using => Ok(Node::JoinUsing {
             table,
-            columns: parens(l, column_list)?,
+            columns: parens(column_list)(l)?,
         }),
         Token::On => Ok(Node::JoinOn {
             table,
-            expr: Box::new(parens(l, expr)?),
+            expr: Box::new(parens(expr)(l)?),
         }),
         t => Err(Unexpected(t)),
     }
@@ -286,15 +258,9 @@ fn limit_expr(l: &mut Lexer) -> Result<Node> {
     }
 }
 
-fn parens<T, F: Fn(&mut Lexer) -> Result<T>>(l: &mut Lexer, f: F) -> Result<T> {
-    check_next!(l, Token::LParen);
-    let n = f(l)?;
-    check_next!(l, Token::RParen);
-
-    Ok(n)
-}
-
-fn parens2<T>(f: impl Fn(&mut Lexer) -> Result<T>) -> impl Fn(&mut Lexer) -> Result<T> {
+fn parens<T>(
+    f: impl Fn(&mut Lexer) -> Result<T> + Copy,
+) -> impl Fn(&mut Lexer) -> Result<T> + Copy {
     move |l: &mut Lexer| -> Result<T> {
         check_next!(l, Token::LParen);
         let n = f(l)?;
@@ -324,7 +290,7 @@ fn expr(l: &mut Lexer) -> Result<Node> {
                 let op = t.into();
                 match op {
                     Op::Between => between(l)?,
-                    Op::In => Node::Expr(op, parens(l, list)?),
+                    Op::In => Node::Expr(op, parens(list(literal))(l)?),
                     _ => {
                         let ((), r_bp) = prefix_bp(&op);
                         let rhs = expr_bp(l, r_bp)?;

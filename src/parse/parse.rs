@@ -166,19 +166,34 @@ fn list(l: &mut Lexer) -> Result<Vec<Node>> {
     _list(l, Vec::new(), State::Item)
 }
 
-fn list_list<T, F: Fn(&mut Lexer) -> Result<Vec<T>>>(l: &mut Lexer, f: F) -> Result<Vec<Vec<T>>> {
+#[allow(unused)]
+fn literal(l: &mut Lexer) -> Result<Node> {
+    match l.peek() {
+        Token::StringLiteral(s) => {
+            l.next();
+            Ok(Node::StringLiteral(s))
+        }
+        Token::IntegerLiteral(i) => {
+            l.next();
+            Ok(Node::IntegerLiteral(i))
+        }
+        t => Err(Unexpected(t)),
+    }
+}
+
+fn list_list<T, F: Fn(&mut Lexer) -> Result<T>>(l: &mut Lexer, f: F) -> Result<Vec<T>> {
     #[derive(PartialEq, Debug)]
     enum State {
         Comma,
         Item,
     }
 
-    fn list_list<T, F: Fn(&mut Lexer) -> Result<Vec<T>>>(
+    fn list_list<T>(
         l: &mut Lexer,
-        f: F,
-        mut list: Vec<Vec<T>>,
+        f: impl Fn(&mut Lexer) -> Result<T>,
+        mut list: Vec<T>,
         state: State,
-    ) -> Result<Vec<Vec<T>>> {
+    ) -> Result<Vec<T>> {
         match l.peek() {
             Token::Comma if state == State::Comma => {
                 l.next();

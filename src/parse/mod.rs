@@ -73,9 +73,9 @@ pub enum Node {
     },
 
     Insert {
-        columns: Vec<Node>,
+        columns: Vec<Node>, // ColumnRef
         table: Box<Node>,
-        inserts: Vec<Vec<Node>>,
+        inserts: Vec<Vec<Node>>, // List of list of StringLiteral or IntegerLiteral
     },
 
     Expr(Op, Vec<Node>),

@@ -6,10 +6,10 @@ use crate::{
 };
 
 pub fn select(l: &mut Lexer) -> Result<Node> {
-    assert_eq!(l.next(), Token::Select);
+    check_next!(l, Token::Select);
 
     let columns = fields(l)?;
-    assert_eq!(l.next(), Token::From);
+    check_next!(l, Token::From);
     let table = Box::new(table_expr(l)?);
 
     let mut r#where = None;

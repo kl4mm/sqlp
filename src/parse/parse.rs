@@ -80,7 +80,7 @@ pub fn insert(l: &mut Lexer) -> Result<Node> {
     };
 
     let columns = match l.peek() {
-        Token::LParen => parens(column_list)(l)?,
+        Token::LParen => parens(list(column_ref))(l)?,
         _ => vec![],
     };
 
@@ -102,36 +102,8 @@ fn fields(l: &mut Lexer) -> Result<Vec<Node>> {
             return Ok(vec![Node::All]);
         }
 
-        _ => column_list(l),
+        _ => list(column_ref)(l),
     }
-}
-
-fn column_list(l: &mut Lexer) -> Result<Vec<Node>> {
-    #[derive(PartialEq, Debug)]
-    enum State {
-        Comma,
-        Column,
-    }
-
-    fn column_list(l: &mut Lexer, mut list: Vec<Node>, state: State) -> Result<Vec<Node>> {
-        match l.peek() {
-            Token::Comma if state == State::Comma => {
-                l.next();
-                column_list(l, list, State::Column)
-            }
-            Token::TableOrColumnReference(_) | Token::TableAndColumnReference(_, _)
-                if state == State::Column =>
-            {
-                list.push(column_ref(l)?);
-                column_list(l, list, State::Comma)
-            }
-
-            _ if state == State::Comma => return Ok(list),
-            t => Err(Unexpected(t)),
-        }
-    }
-
-    column_list(l, Vec::new(), State::Column)
 }
 
 fn list<T>(
@@ -167,7 +139,6 @@ fn list<T>(
     }
 }
 
-#[allow(unused)]
 fn literal(l: &mut Lexer) -> Result<Node> {
     match l.peek() {
         Token::StringLiteral(s) => {
@@ -219,7 +190,7 @@ fn join_expr(l: &mut Lexer) -> Result<Node> {
     match l.next() {
         Token::Using => Ok(Node::JoinUsing {
             table,
-            columns: parens(column_list)(l)?,
+            columns: parens(list(column_ref))(l)?,
         }),
         Token::On => Ok(Node::JoinOn {
             table,
@@ -239,14 +210,14 @@ fn group_expr(l: &mut Lexer) -> Result<Vec<Node>> {
     check_next!(l, Token::Group);
     check_next!(l, Token::By);
 
-    column_list(l)
+    list(column_ref)(l)
 }
 
 fn order_expr(l: &mut Lexer) -> Result<Vec<Node>> {
     check_next!(l, Token::Order);
     check_next!(l, Token::By);
 
-    column_list(l)
+    list(column_ref)(l)
 }
 
 fn limit_expr(l: &mut Lexer) -> Result<Node> {

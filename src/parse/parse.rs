@@ -140,13 +140,11 @@ fn list<T>(
 }
 
 fn literal(l: &mut Lexer) -> Result<Node> {
-    match l.peek() {
+    match l.next() {
         Token::StringLiteral(s) => {
-            l.next();
             Ok(Node::StringLiteral(s))
         }
         Token::IntegerLiteral(i) => {
-            l.next();
             Ok(Node::IntegerLiteral(i))
         }
         t => Err(Unexpected(t)),

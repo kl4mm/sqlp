@@ -118,6 +118,43 @@ pub fn delete(l: &mut Lexer) -> Result<Node> {
     })
 }
 
+pub fn update(l: &mut Lexer) -> Result<Node> {
+    check_next!(l, Token::Update);
+
+    let table = match l.next() {
+        Token::TableOrColumnReference(table) => table,
+        t => Err(Unexpected(t))?,
+    };
+
+    check_next!(l, Token::Set);
+
+    let assignments = list(assignment)(l)?;
+
+    let mut r#where = None;
+    if let Token::Where = l.peek() {
+        r#where = Some(Box::new(where_expr(l)?));
+    }
+
+    Ok(Node::Update {
+        table,
+        assignments,
+        r#where,
+    })
+}
+
+fn assignment(l: &mut Lexer) -> Result<Node> {
+    let column = match l.next() {
+        Token::TableOrColumnReference(column) => column,
+        t => Err(Unexpected(t))?,
+    };
+
+    check_next!(l, Token::Eq);
+
+    let value = Box::new(literal(l)?);
+
+    Ok(Node::Assignment { column, value })
+}
+
 pub fn create(l: &mut Lexer) -> Result<Node> {
     check_next!(l, [Token::Create, Token::Table]);
 
@@ -1049,6 +1086,50 @@ mod test {
         for Test { input, want } in tcs {
             let mut l = Lexer::new(input);
             let have = delete(&mut l);
+
+            assert_eq!(want, have)
+        }
+    }
+
+    #[test]
+    fn test_parse_update() {
+        let tcs = [
+            Test {
+                input: "update tablea set columna = 10",
+                want: Ok(Node::Update {
+                    table: "tablea".into(),
+                    assignments: vec![Node::Assignment {
+                        column: "columna".into(),
+                        value: Box::new(Node::IntegerLiteral(10)),
+                    }],
+                    r#where: None,
+                }),
+            },
+            Test {
+                input: "update tablea set columna = 10, columnb = \"test\" where 1 = 1",
+                want: Ok(Node::Update {
+                    table: "tablea".into(),
+                    assignments: vec![
+                        Node::Assignment {
+                            column: "columna".into(),
+                            value: Box::new(Node::IntegerLiteral(10)),
+                        },
+                        Node::Assignment {
+                            column: "columnb".into(),
+                            value: Box::new(Node::StringLiteral("test".into())),
+                        },
+                    ],
+                    r#where: Some(Box::new(Node::Expr(
+                        Op::Eq,
+                        vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
+                    ))),
+                }),
+            },
+        ];
+
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = update(&mut l);
 
             assert_eq!(want, have)
         }

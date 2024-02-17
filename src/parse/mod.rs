@@ -105,6 +105,17 @@ pub enum Node {
         limit: Option<Box<Node>>,
     },
 
+    Update {
+        table: String,
+        assignments: Vec<Node>,
+        r#where: Option<Box<Node>>,
+    },
+
+    Assignment {
+        column: String,
+        value: Box<Node>,
+    },
+
     ColumnDef {
         column: String,
         ty: Type,
@@ -236,9 +247,11 @@ macro_rules! check_next {
 
 pub fn query(l: &mut Lexer) -> Result<Node> {
     let q = match l.peek() {
+        Token::Create => self::parse::create(l),
         Token::Select => self::parse::select(l),
         Token::Insert => self::parse::insert(l),
-        Token::Create => self::parse::create(l),
+        Token::Update => self::parse::update(l),
+        Token::Delete => self::parse::delete(l),
         t => Err(Unexpected(t)),
     };
 

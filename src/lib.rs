@@ -39,6 +39,7 @@ pub enum Token {
     Order,
     Asc,
     Desc,
+    Set,
 
     Eq,
     Neq,
@@ -96,6 +97,7 @@ impl Into<Token> for &str {
             "order" => Token::Order,
             "asc" => Token::Asc,
             "desc" => Token::Desc,
+            "set" => Token::Set,
 
             "=" => Token::Eq,
             "!=" => Token::Neq,

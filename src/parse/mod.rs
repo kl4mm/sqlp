@@ -99,6 +99,12 @@ pub enum Node {
         columns: Vec<Node>, // ColumnDef
     },
 
+    Delete {
+        table: String,
+        r#where: Option<Box<Node>>, // Expr
+        limit: Option<Box<Node>>,
+    },
+
     ColumnDef {
         column: String,
         ty: Type,

@@ -93,6 +93,31 @@ pub fn insert(l: &mut Lexer) -> Result<Node> {
     })
 }
 
+pub fn delete(l: &mut Lexer) -> Result<Node> {
+    check_next!(l, [Token::Delete, Token::From]);
+
+    let table = match l.next() {
+        Token::TableOrColumnReference(table) => table,
+        t => Err(Unexpected(t))?,
+    };
+
+    let mut r#where = None;
+    if let Token::Where = l.peek() {
+        r#where = Some(Box::new(where_expr(l)?));
+    }
+
+    let mut limit = None;
+    if let Token::Limit = l.peek() {
+        limit = Some(Box::new(limit_expr(l)?));
+    }
+
+    Ok(Node::Delete {
+        table,
+        r#where,
+        limit,
+    })
+}
+
 pub fn create(l: &mut Lexer) -> Result<Node> {
     check_next!(l, [Token::Create, Token::Table]);
 
@@ -981,6 +1006,49 @@ mod test {
         for Test { input, want } in tcs {
             let mut l = Lexer::new(input);
             let have = create(&mut l);
+
+            assert_eq!(want, have)
+        }
+    }
+
+    #[test]
+    fn test_parse_delete() {
+        let tcs = [
+            Test {
+                input: "delete from tablea",
+                want: Ok(Node::Delete {
+                    table: "tablea".into(),
+                    r#where: None,
+                    limit: None,
+                }),
+            },
+            Test {
+                input: "delete from tablea where 1 = 1",
+                want: Ok(Node::Delete {
+                    table: "tablea".into(),
+                    r#where: Some(Box::new(Node::Expr(
+                        Op::Eq,
+                        vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
+                    ))),
+                    limit: None,
+                }),
+            },
+            Test {
+                input: "delete from tablea where 1 = 1 limit 1000",
+                want: Ok(Node::Delete {
+                    table: "tablea".into(),
+                    r#where: Some(Box::new(Node::Expr(
+                        Op::Eq,
+                        vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
+                    ))),
+                    limit: Some(Box::new(Node::IntegerLiteral(1000))),
+                }),
+            },
+        ];
+
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = delete(&mut l);
 
             assert_eq!(want, have)
         }

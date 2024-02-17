@@ -1,8 +1,7 @@
-use crate::{Lexer, Token};
-
 use crate::{
     check_next,
     parse::{Node, Op, Result, Unexpected},
+    Lexer, Token,
 };
 
 pub fn select(l: &mut Lexer) -> Result<Node> {
@@ -71,8 +70,7 @@ pub fn select(l: &mut Lexer) -> Result<Node> {
 }
 
 pub fn insert(l: &mut Lexer) -> Result<Node> {
-    check_next!(l, Token::Insert);
-    check_next!(l, Token::Into);
+    check_next!(l, [Token::Insert, :Token::Into]);
 
     let table = match l.next() {
         Token::TableOrColumnReference(table) => Box::new(Node::TableRef(table)),
@@ -141,12 +139,8 @@ fn list<T>(
 
 fn literal(l: &mut Lexer) -> Result<Node> {
     match l.next() {
-        Token::StringLiteral(s) => {
-            Ok(Node::StringLiteral(s))
-        }
-        Token::IntegerLiteral(i) => {
-            Ok(Node::IntegerLiteral(i))
-        }
+        Token::StringLiteral(s) => Ok(Node::StringLiteral(s)),
+        Token::IntegerLiteral(i) => Ok(Node::IntegerLiteral(i)),
         t => Err(Unexpected(t)),
     }
 }
@@ -205,15 +199,13 @@ fn where_expr(l: &mut Lexer) -> Result<Node> {
 }
 
 fn group_expr(l: &mut Lexer) -> Result<Vec<Node>> {
-    check_next!(l, Token::Group);
-    check_next!(l, Token::By);
+    check_next!(l, [Token::Group, Token::By]);
 
     list(column_ref)(l)
 }
 
 fn order_expr(l: &mut Lexer) -> Result<Vec<Node>> {
-    check_next!(l, Token::Order);
-    check_next!(l, Token::By);
+    check_next!(l, [Token::Order, Token::By]);
 
     list(column_ref)(l)
 }
@@ -887,6 +879,30 @@ mod test {
                         ]
                     ],
                 })
+            },
+            Test {
+                input: "insert tablea (columna, columnb) values (1, 2)",
+                want: Ok(Node::Insert{
+                    columns: vec![
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columna".into(),
+                            alias: None
+                        },
+                        Node::ColumnRef {
+                            table: None,
+                            column: "columnb".into(),
+                            alias: None
+                        },
+                    ],
+                    table: Box::new(Node::TableRef("tablea".into())),
+                    inserts: vec![
+                        vec![
+                            Node::IntegerLiteral(1),
+                            Node::IntegerLiteral(2),
+                        ],
+                    ],
+                }),
             }
         ];
 

@@ -176,11 +176,28 @@ type Result<T> = std::result::Result<T, Unexpected>;
 
 #[macro_export]
 macro_rules! check_next {
-    ($l:ident, $want:path) => {
+    ($l:ident, :$want:path) => {
+        match $l.peek() {
+            $want => {$l.next();}
+            _ => {},
+        }
+    };
+    ($l:ident, $need:path) => {
         match $l.next() {
-            $want => {}
+            $need => {}
             t => Err(Unexpected(t))?,
         }
+    };
+    ($l:ident, [$( $($need:path)? $(: $want:path)*),*]) => {
+        $(
+            $(
+                crate::check_next!($l, :$want);
+            )*
+
+            $(
+                crate::check_next!($l, $need);
+            )?
+        )*
     };
 }
 

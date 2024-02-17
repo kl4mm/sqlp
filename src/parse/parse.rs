@@ -1,6 +1,6 @@
 use crate::{
     check_next,
-    parse::{Node, Op, Result, Type, Unexpected},
+    parse::{Node, Op, Result, Unexpected},
     Lexer, Token,
 };
 
@@ -368,6 +368,8 @@ fn prefix_bp(op: &Op) -> ((), u8) {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::parse::Type;
 
     #[test]
     fn test_parse_expr() -> Result<()> {

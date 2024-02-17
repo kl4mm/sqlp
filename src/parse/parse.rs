@@ -1,6 +1,6 @@
 use crate::{
     check_next,
-    parse::{Node, Op, Result, Unexpected},
+    parse::{Node, Op, Result, Type, Unexpected},
     Lexer, Token,
 };
 
@@ -91,6 +91,19 @@ pub fn insert(l: &mut Lexer) -> Result<Node> {
         table,
         inserts,
     })
+}
+
+pub fn create(l: &mut Lexer) -> Result<Node> {
+    check_next!(l, [Token::Create, Token::Table]);
+
+    let table = match l.next() {
+        Token::TableOrColumnReference(table) => table,
+        t => Err(Unexpected(t))?,
+    };
+
+    let columns = parens(list(column_def))(l)?;
+
+    Ok(Node::Create { table, columns })
 }
 
 fn fields(l: &mut Lexer) -> Result<Vec<Node>> {
@@ -229,6 +242,17 @@ fn parens<T>(
 
         Ok(n)
     }
+}
+
+fn column_def(l: &mut Lexer) -> Result<Node> {
+    let column = match l.next() {
+        Token::TableOrColumnReference(column) => column,
+        t => Err(Unexpected(t))?,
+    };
+
+    let ty = l.next().try_into()?;
+
+    Ok(Node::ColumnDef { column, ty })
 }
 
 fn expr(l: &mut Lexer) -> Result<Node> {
@@ -914,5 +938,49 @@ mod test {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_create() {
+        let tcs = [
+            Test {
+                input: "create table tablea (
+                    columna int
+                )",
+                want: Ok(Node::Create {
+                    table: "tablea".into(),
+                    columns: vec![Node::ColumnDef {
+                        column: "columna".into(),
+                        ty: Type::Int,
+                    }],
+                }),
+            },
+            Test {
+                input: "create table tablea (
+                    columna int,
+                    columnb int
+                )",
+                want: Ok(Node::Create {
+                    table: "tablea".into(),
+                    columns: vec![
+                        Node::ColumnDef {
+                            column: "columna".into(),
+                            ty: Type::Int,
+                        },
+                        Node::ColumnDef {
+                            column: "columnb".into(),
+                            ty: Type::Int,
+                        },
+                    ],
+                }),
+            },
+        ];
+
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = create(&mut l);
+
+            assert_eq!(want, have)
+        }
     }
 }

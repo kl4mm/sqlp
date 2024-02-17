@@ -61,6 +61,22 @@ impl From<Token> for Op {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum Type {
+    Int,
+}
+
+impl TryFrom<Token> for Type {
+    type Error = Unexpected;
+
+    fn try_from(t: Token) -> std::prelude::v1::Result<Self, Self::Error> {
+        match t {
+            Token::Int => Ok(Type::Int),
+            t => Err(Unexpected(t)),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Node {
     Select {
         columns: Vec<Node>,
@@ -73,9 +89,20 @@ pub enum Node {
     },
 
     Insert {
-        columns: Vec<Node>, // ColumnRef
-        table: Box<Node>,
+        columns: Vec<Node>,      // ColumnRef
+        table: Box<Node>,        // TableRef
         inserts: Vec<Vec<Node>>, // List of list of StringLiteral or IntegerLiteral
+    },
+
+    Create {
+        table: String,
+        columns: Vec<Node>, // ColumnDef
+    },
+
+    ColumnDef {
+        column: String,
+        ty: Type,
+        // TODO: constraints
     },
 
     Expr(Op, Vec<Node>),
@@ -205,6 +232,7 @@ pub fn query(l: &mut Lexer) -> Result<Node> {
     let q = match l.peek() {
         Token::Select => self::parse::select(l),
         Token::Insert => self::parse::insert(l),
+        Token::Create => self::parse::create(l),
         t => Err(Unexpected(t)),
     };
 

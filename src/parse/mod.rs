@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{Lexer, Token};
 
 pub mod parse;
@@ -79,10 +81,15 @@ impl TryFrom<Token> for Type {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum JoinType {
+    Inner,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Node {
     Select {
         columns: Vec<Node>,
-        table: Box<Node>,           // TableRef or Select
+        table: Rc<Node>,            // TableRef|Select
         r#where: Option<Box<Node>>, // Expr
         group: Vec<Node>,
         order: Vec<Node>,
@@ -93,7 +100,7 @@ pub enum Node {
     Insert {
         columns: Vec<Node>,      // ColumnRef
         table: Box<Node>,        // TableRef
-        inserts: Vec<Vec<Node>>, // List of list of StringLiteral or IntegerLiteral
+        inserts: Vec<Vec<Node>>, // [[StringLiteral]|[IntegerLiteral]]
     },
 
     Create {
@@ -134,14 +141,13 @@ pub enum Node {
 
     TableRef(String),
 
-    JoinUsing {
-        table: Box<Node>,
-        columns: Vec<Node>, // Of ColumnRef
-    },
-
-    JoinOn {
-        table: Box<Node>,
-        expr: Box<Node>, // Expr
+    Join {
+        ty: JoinType,
+        left: Rc<Node>,           // TableRef|Select
+        right: Rc<Node>,          // TableRef|Select
+        using: Option<Vec<Node>>, // ColumnRef
+        expr: Option<Box<Node>>,  // Expr
+        alias: Option<String>,
     },
 
     StringLiteral(String),
@@ -181,16 +187,6 @@ impl std::fmt::Display for Node {
                 Ok(())
             }
             Node::TableRef(t) => write!(f, "{t}"),
-            Node::JoinUsing { table, columns } => {
-                write!(f, "JOIN {table} USING (")?;
-                for c in columns {
-                    write!(f, " {c}")?;
-                }
-                write!(f, ")")
-            }
-            Node::JoinOn { table, expr } => {
-                write!(f, "JOIN {table} ON {expr}")
-            }
             Node::StringLiteral(s) => write!(f, "\"{s}\""),
             Node::IntegerLiteral(i) => write!(f, "{i}"),
             Node::All => write!(f, "ALL"),

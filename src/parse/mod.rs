@@ -63,6 +63,7 @@ impl From<Token> for Op {
 #[derive(Debug, PartialEq)]
 pub enum Type {
     Int,
+    Varchar(Box<Node>),
 }
 
 impl TryFrom<Token> for Type {
@@ -71,6 +72,7 @@ impl TryFrom<Token> for Type {
     fn try_from(t: Token) -> std::prelude::v1::Result<Self, Self::Error> {
         match t {
             Token::Int => Ok(Type::Int),
+            Token::Varchar => Ok(Type::Varchar(Box::new(Node::None))),
             t => Err(Unexpected(t)),
         }
     }

@@ -8,8 +8,8 @@ pub enum Token {
     Create,
     Table,
 
-    // Should be Type(<type>)
     Int,
+    Varchar,
 
     Select,
     Insert,
@@ -68,6 +68,7 @@ impl Into<Token> for &str {
             "create" => Token::Create,
             "table" => Token::Table,
             "int" => Token::Int,
+            "varchar" => Token::Varchar,
 
             "select" => Token::Select,
             "insert" => Token::Insert,

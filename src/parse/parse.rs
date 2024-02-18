@@ -1,6 +1,6 @@
 use crate::{
     check_next,
-    parse::{Node, Op, Result, Unexpected},
+    parse::{Node, Op, Result, Type, Unexpected},
     Lexer, Token,
 };
 
@@ -212,10 +212,24 @@ fn list<T>(
     }
 }
 
-fn literal(l: &mut Lexer) -> Result<Node> {
+fn integer(l: &mut Lexer) -> Result<Node> {
+    match l.next() {
+        Token::IntegerLiteral(i) => Ok(Node::IntegerLiteral(i)),
+        t => Err(Unexpected(t)),
+    }
+}
+
+fn string(l: &mut Lexer) -> Result<Node> {
     match l.next() {
         Token::StringLiteral(s) => Ok(Node::StringLiteral(s)),
-        Token::IntegerLiteral(i) => Ok(Node::IntegerLiteral(i)),
+        t => Err(Unexpected(t)),
+    }
+}
+
+fn literal(l: &mut Lexer) -> Result<Node> {
+    match l.peek() {
+        Token::StringLiteral(_) => string(l),
+        Token::IntegerLiteral(_) => integer(l),
         t => Err(Unexpected(t)),
     }
 }
@@ -312,7 +326,10 @@ fn column_def(l: &mut Lexer) -> Result<Node> {
         t => Err(Unexpected(t))?,
     };
 
-    let ty = l.next().try_into()?;
+    let mut ty = l.next().try_into()?;
+    if let Type::Varchar(n) = &mut ty {
+        *n.as_mut() = parens(integer)(l)?
+    }
 
     Ok(Node::ColumnDef { column, ty })
 }
@@ -1033,6 +1050,30 @@ mod test {
                         },
                         Node::ColumnDef {
                             column: "columnb".into(),
+                            ty: Type::Int,
+                        },
+                    ],
+                }),
+            },
+            Test {
+                input: "create table tablea (
+                    columna int,
+                    columnb varchar(255),
+                    columnc int
+                )",
+                want: Ok(Node::Create {
+                    table: "tablea".into(),
+                    columns: vec![
+                        Node::ColumnDef {
+                            column: "columna".into(),
+                            ty: Type::Int,
+                        },
+                        Node::ColumnDef {
+                            column: "columnb".into(),
+                            ty: Type::Varchar(Box::new(Node::IntegerLiteral(255))),
+                        },
+                        Node::ColumnDef {
+                            column: "columnc".into(),
                             ty: Type::Int,
                         },
                     ],

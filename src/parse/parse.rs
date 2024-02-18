@@ -228,10 +228,18 @@ fn string(l: &mut Lexer) -> Result<Node> {
     }
 }
 
+fn null(l: &mut Lexer) -> Result<Node> {
+    match l.next() {
+        Token::Null => Ok(Node::Null),
+        t => Err(Unexpected(t)),
+    }
+}
+
 fn literal(l: &mut Lexer) -> Result<Node> {
     match l.peek() {
         Token::StringLiteral(_) => string(l),
         Token::IntegerLiteral(_) => integer(l),
+        Token::Null => null(l),
         t => Err(Unexpected(t)),
     }
 }
@@ -277,6 +285,7 @@ fn join_table(l: &mut Lexer, left: Rc<Node>) -> Result<Node> {
     match l.next() {
         Token::Using => {
             using = Some(parens(list(column_ref))(l)?);
+            // TODO: fill out expr_
         }
         Token::On => expr_ = Some(Box::new(parens(expr)(l)?)),
         t => Err(Unexpected(t))?,
@@ -1054,7 +1063,7 @@ mod test {
                 })
             },
             Test {
-                input: "insert tablea (columna, columnb) values (1, 2)",
+                input: "insert tablea (columna, columnb) values (1, NULL)",
                 want: Ok(Node::Insert{
                     columns: vec![
                         Node::ColumnRef {
@@ -1072,7 +1081,7 @@ mod test {
                     inserts: vec![
                         vec![
                             Node::IntegerLiteral(1),
-                            Node::IntegerLiteral(2),
+                            Node::Null,
                         ],
                     ],
                 }),

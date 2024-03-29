@@ -1,5 +1,6 @@
 pub mod parse;
 
+// TODO: Support functions
 #[derive(Debug, PartialEq)]
 pub enum Token {
     LParen,

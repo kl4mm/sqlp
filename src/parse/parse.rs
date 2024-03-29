@@ -477,6 +477,9 @@ mod test {
             want: &'static str,
         }
 
+        // TODO: IN is binary
+        // TODO: BETWEEN is binary
+        // TODO: NOT is unary
         let tcs = [
             Test {
                 input: "12 = 12",

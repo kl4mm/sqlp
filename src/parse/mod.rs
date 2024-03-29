@@ -80,6 +80,7 @@ impl TryFrom<Token> for Type {
     }
 }
 
+// TODO: Support more join types
 #[derive(Debug, PartialEq)]
 pub enum JoinType {
     Inner,
@@ -100,7 +101,7 @@ pub enum Node {
     Insert {
         columns: Vec<Node>,      // ColumnRef
         table: Box<Node>,        // TableRef
-        inserts: Vec<Vec<Node>>, // [[StringLiteral]|[IntegerLiteral]]
+        inserts: Vec<Vec<Node>>, // [[StringLiteral|IntegerLiteral|Null]]
     },
 
     Create {
@@ -243,6 +244,7 @@ macro_rules! check_next {
     };
 }
 
+// TODO: Support unions
 pub fn query(l: &mut Lexer) -> Result<Node> {
     let q = match l.peek() {
         Token::Create => self::parse::create(l),

@@ -20,6 +20,9 @@ pub enum Op {
     In,
     Between,
     Is,
+
+    NotIn,
+    NotBetween,
 }
 
 impl std::fmt::Display for Op {
@@ -37,6 +40,8 @@ impl std::fmt::Display for Op {
             Op::In => write!(f, "IN"),
             Op::Between => write!(f, "BETWEEN"),
             Op::Is => write!(f, "IS"),
+            Op::NotIn => write!(f, "NOT IN"),
+            Op::NotBetween => write!(f, "NOT BETWEEN"),
         }
     }
 }
@@ -154,6 +159,9 @@ pub enum Node {
     StringLiteral(String),
     IntegerLiteral(u64),
 
+    Between(Box<Node>, Box<Node>),
+    In(Vec<Node>),
+
     All,
     Null,
 
@@ -193,6 +201,8 @@ impl std::fmt::Display for Node {
             Node::All => write!(f, "ALL"),
             Node::Null => write!(f, "NULL"),
             Node::None => write!(f, "NONE"),
+            Node::Between(from, to) => write!(f, "{} {}", from, to),
+            // Node::Between(from, to) => write!(f, "{} AND {}", from, to),
             _ => unimplemented!(),
         }
     }

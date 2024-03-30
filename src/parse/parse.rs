@@ -365,7 +365,7 @@ fn expr(l: &mut Lexer) -> Result<Node> {
     fn expr_bp(l: &mut Lexer, min_bp: u8, mut state: State) -> Result<Node> {
         let mut lhs: Node = match state {
             State::Between => between(l)?,
-            State::In => todo!(),
+            State::In => Node::In(parens(list(literal))(l)?),
             State::None => match l.next() {
                 Token::TableAndColumnReference(table, column) => Node::ColumnRef {
                     table: Some(table),
@@ -383,24 +383,6 @@ fn expr(l: &mut Lexer) -> Result<Node> {
                 t => Err(Unexpected(t))?,
             },
         };
-        state = State::None;
-
-        // let mut lhs: Node = match l.next() {
-        //     Token::TableAndColumnReference(table, column) => Node::ColumnRef {
-        //         table: Some(table),
-        //         column,
-        //         alias: None,
-        //     },
-        //     Token::TableOrColumnReference(column) => Node::ColumnRef {
-        //         table: None,
-        //         column,
-        //         alias: None,
-        //     },
-        //     Token::StringLiteral(s) => Node::StringLiteral(s),
-        //     Token::IntegerLiteral(i) => Node::IntegerLiteral(i),
-        //     Token::Null => Node::Null,
-        //     t => Err(Unexpected(t))?,
-        // };
 
         loop {
             let op = match l.peek() {
@@ -409,7 +391,7 @@ fn expr(l: &mut Lexer) -> Result<Node> {
                 _ => break,
             };
 
-            // if op = not, check if not in, not between or not <expr>
+            // if op = not, check if not in, not between
             let op = match op {
                 Op::Negation => {
                     l.next();
@@ -419,14 +401,8 @@ fn expr(l: &mut Lexer) -> Result<Node> {
                     };
 
                     match op {
-                        Op::Between => {
-                            state = State::Between;
-                            Op::NotBetween
-                        }
-                        Op::In => {
-                            state = State::In;
-                            Op::NotIn
-                        }
+                        Op::Between => Op::NotBetween,
+                        Op::In => Op::NotIn,
                         _ => Err(Unexpected(l.peek()))?,
                     }
                 }
@@ -434,18 +410,15 @@ fn expr(l: &mut Lexer) -> Result<Node> {
             };
 
             match op {
-                Op::Between => state = State::Between,
-                Op::In => state = State::In,
-                _ => {}
+                Op::Between | Op::NotBetween => state = State::Between,
+                Op::In | Op::NotIn => state = State::In,
+                _ => state = State::None,
             }
 
             let (l_bp, r_bp) = infix_bp(&op);
             if l_bp < min_bp {
                 break;
             }
-
-            // l.next();
-            // let rhs = expr_bp(l, r_bp)?;
 
             let rhs = match l.next() {
                 _ => expr_bp(l, r_bp, state)?,
@@ -517,9 +490,6 @@ mod test {
             want: &'static str,
         }
 
-        // TODO: IN is binary
-        // TODO: BETWEEN is binary
-        // TODO: NOT is unary
         let tcs = [
             Test {
                 input: "12 = 12",
@@ -539,32 +509,41 @@ mod test {
             },
             Test {
                 input: "columna BETWEEN 100 AND 200",
-                want: "(BETWEEN columna 100 200)",
+                want: "(BETWEEN columna (100 200))",
             },
-            // Test {
-            //     input: "columna IS NULL",
-            //     want: "(IS columna NULL)",
-            // },
-            // Test {
-            //     input: "columna NOT NULL",
+            Test {
+                input: "columna IN (100, 200, 300)",
+                want: "(IN columna [100 200 300])",
+            },
+            Test {
+                input: "columna IS NULL",
+                want: "(IS columna NULL)",
+            },
+            // Test { // TODO
+            //     input: "columna IS NOT NULL",
             //     want: "(NOT columna NULL)",
             // },
-            // Test {
-            //     input: "columna NOT BETWEEN 100 AND 200",
-            //     want: "(NOT columna (BETWEEN 100 200))",
-            // },
-            // Test {
-            //     input: "columna NOT BETWEEN 100 AND 200 AND 1 < 2",
-            //     want: "(AND (NOT columna (BETWEEN 100 200)) (< 1 2))",
-            // },
-            // Test {
-            //     input: "columna NOT IN (1, 2, 3, 4)",
-            //     want: "(NOT columna (IN 1 2 3 4))",
-            // },
-            // Test {
-            //     input: "columna NOT IN (1, 2, 3, 4) AND columna = columnb OR IN (6, 7, 8)",
-            //     want: "(OR (AND (NOT columna (IN 1 2 3 4)) (= columna columnb)) (IN 6 7 8))",
-            // },
+            Test {
+                input: "columna NOT BETWEEN 100 AND 200",
+                want: "(NOT BETWEEN columna (100 200))",
+            },
+            Test {
+                input: "columna BETWEEN 100 AND 200 AND 1 < 2",
+                want: "(AND (BETWEEN columna (100 200)) (< 1 2))",
+            },
+            Test {
+                input: "columna NOT BETWEEN 100 AND 200 AND 1 < 2",
+                want: "(AND (NOT BETWEEN columna (100 200)) (< 1 2))",
+            },
+            Test {
+                input: "columna NOT IN (1, 2, 3, 4)",
+                want: "(NOT IN columna [1 2 3 4])",
+            },
+            Test {
+                input: "columna NOT IN (1, 2, 3, 4) AND columna = columnb OR columna IN (6, 7, 8)",
+                want:
+                    "(OR (AND (NOT IN columna [1 2 3 4]) (= columna columnb)) (IN columna [6 7 8]))",
+            },
         ];
 
         for Test { input, want } in tcs {

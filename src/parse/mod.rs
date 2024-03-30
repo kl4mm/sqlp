@@ -201,8 +201,18 @@ impl std::fmt::Display for Node {
             Node::All => write!(f, "ALL"),
             Node::Null => write!(f, "NULL"),
             Node::None => write!(f, "NONE"),
-            Node::Between(from, to) => write!(f, "{} {}", from, to),
-            // Node::Between(from, to) => write!(f, "{} AND {}", from, to),
+            Node::Between(from, to) => write!(f, "({} {})", from, to),
+            Node::In(vs) => {
+                if vs.len() == 0 {
+                    return write!(f, "[]");
+                }
+
+                write!(f, "[{}", vs[0])?;
+                for v in &vs[1..] {
+                    write!(f, " {}", v)?;
+                }
+                write!(f, "]")
+            }
             _ => unimplemented!(),
         }
     }

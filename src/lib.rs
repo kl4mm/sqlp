@@ -161,10 +161,6 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn peek(&self) -> Token {
-        if self.src.is_empty() {
-            return Token::Eof;
-        }
-
         let mut src = self.src;
         while !self.src.is_empty() {
             let s = chop(src);

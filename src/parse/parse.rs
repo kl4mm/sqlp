@@ -400,6 +400,13 @@ fn expr(l: &mut Lexer) -> Result<Node> {
                         _ => Err(Unexpected(l.peek()))?,
                     }
                 }
+                Token::Is => match l.peek_n(2) {
+                    Token::Negation => {
+                        l.next();
+                        Op::Negation
+                    }
+                    _ => Op::Is,
+                },
                 t if is_infix(&t) => t.into(),
                 _ => break,
             };
@@ -515,10 +522,10 @@ mod test {
                 input: "columna IS NULL",
                 want: "(IS columna NULL)",
             },
-            // Test { // TODO
-            //     input: "columna IS NOT NULL",
-            //     want: "(NOT columna NULL)",
-            // },
+            Test {
+                input: "columna IS NOT NULL",
+                want: "(NOT columna NULL)",
+            },
             Test {
                 input: "columna NOT BETWEEN 100 AND 200",
                 want: "(NOT BETWEEN columna (100 200))",

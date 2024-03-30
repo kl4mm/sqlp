@@ -179,6 +179,28 @@ impl<'a> Lexer<'a> {
         Token::Eof
     }
 
+    pub fn peek_n(&self, mut n: usize) -> Token {
+        let mut t = Token::Eof;
+        let mut src = self.src;
+        while n > 0 {
+            if src.is_empty() {
+                return Token::Eof;
+            }
+
+            let s = chop(src);
+            if s.is_empty() {
+                src = &src[1..];
+                continue;
+            }
+
+            t = s.into();
+            src = &src[s.len()..];
+            n -= 1;
+        }
+
+        t
+    }
+
     pub fn to_vec(mut self) -> Vec<Token> {
         let mut tkns = Vec::new();
         loop {
@@ -527,6 +549,43 @@ mod test {
         for TestCase { input, want } in tcs {
             let have = Lexer::new(input).to_vec();
             assert!(want == have, "\nWant: {:?}\nHave: {:?}", want, have);
+        }
+    }
+
+    #[test]
+    fn test_peek_n() {
+        struct Test {
+            input: &'static str,
+            peek: usize,
+            want: Token,
+        }
+
+        let tcs = [
+            Test {
+                input: "",
+                peek: 2,
+                want: Token::Eof,
+            },
+            Test {
+                input: "select",
+                peek: 2,
+                want: Token::Eof,
+            },
+            Test {
+                input: "select *",
+                peek: 2,
+                want: Token::All,
+            },
+            Test {
+                input: "select * from tablea where",
+                peek: 5,
+                want: Token::Where,
+            },
+        ];
+
+        for Test { input, peek, want } in tcs {
+            let have = Lexer::new(input).peek_n(peek);
+            assert_eq!(want, have);
         }
     }
 

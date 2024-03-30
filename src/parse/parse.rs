@@ -563,722 +563,721 @@ mod test {
         want: Result<Node>,
     }
 
-    //     #[test]
-    //     fn test_parse_select() -> Result<()> {
-    //         let tcs = [
-    //             Test {
-    //                 input: "select * from tablea;",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select columna, columnb from tablea;",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columna".into(),
-    //                             alias: None,
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnb".into(),
-    //                             alias: None,
-    //                         },
-    //                     ],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select columna, columnb, columnc from tablea;",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columna".into(),
-    //                             alias: None,
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnb".into(),
-    //                             alias: None,
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnc".into(),
-    //                             alias: None,
-    //                         },
-    //                     ],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join tableb using (columna, columnb);",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![Node::Join {
-    //                         ty: JoinType::Inner,
-    //                         left: Rc::new(Node::TableRef("tablea".into())),
-    //                         right: Rc::new(Node::TableRef("tableb".into())),
-    //                         using: Some(vec![
-    //                             Node::ColumnRef {
-    //                                 table: None,
-    //                                 column: "columna".into(),
-    //                                 alias: None,
-    //                             },
-    //                             Node::ColumnRef {
-    //                                 table: None,
-    //                                 column: "columnb".into(),
-    //                                 alias: None,
-    //                             },
-    //                         ]),
-    //                         expr: None,
-    //                         alias: None,
-    //                     }],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join (select * from tableb) using (columna, columnb);",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![Node::Join {
-    //                         ty: JoinType::Inner,
-    //                         left: Rc::new(Node::TableRef("tablea".into())),
-    //                         right: Rc::new(Node::Select {
-    //                             columns: vec![Node::All],
-    //                             table: Rc::new(Node::TableRef("tableb".into())),
-    //                             r#where: None,
-    //                             group: vec![],
-    //                             order: vec![],
-    //                             joins: vec![],
-    //                             limit: None,
-    //                         }),
-    //                         using: Some(vec![
-    //                             Node::ColumnRef {
-    //                                 table: None,
-    //                                 column: "columna".into(),
-    //                                 alias: None,
-    //                             },
-    //                             Node::ColumnRef {
-    //                                 table: None,
-    //                                 column: "columnb".into(),
-    //                                 alias: None,
-    //                             },
-    //                         ]),
-    //                         expr: None,
-    //                         alias: None
-    //                     }],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join (select * from tableb) on (1 = 1);",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![Node::Join {
-    //                         ty: JoinType::Inner,
-    //                         left: Rc::new(Node::TableRef("tablea".into())),
-    //                         right: Rc::new(Node::Select {
-    //                             columns: vec![Node::All],
-    //                             table: Rc::new(Node::TableRef("tableb".into())),
-    //                             r#where: None,
-    //                             group: vec![],
-    //                             order: vec![],
-    //                             joins: vec![],
-    //                             limit: None,
-    //                         }),
-    //                         using: None,
-    //                         expr: Some(Box::new(Node::Expr(
-    //                             Op::Eq,
-    //                             vec![
-    //                                 Node::IntegerLiteral(1),
-    //                                 Node::IntegerLiteral(1)
-    //                             ]
-    //                         ))),
-    //                         alias: None
-    //                     }],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join tableb on (tablea.columna = tableb.columna);",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![Node::Join {
-    //                         ty: JoinType::Inner,
-    //                         left: Rc::new(Node::TableRef("tablea".into())),
-    //                         right: Rc::new(Node::TableRef("tableb".into())),
-    //                         using: None,
-    //                         expr: Some(Box::new(Node::Expr(
-    //                             Op::Eq,
-    //                             vec![
-    //                                 Node::ColumnRef {
-    //                                     table: Some("tablea".into()),
-    //                                     column: "columna".into(),
-    //                                     alias: None,
-    //                                 },
-    //                                 Node::ColumnRef {
-    //                                     table: Some("tableb".into()),
-    //                                     column: "columna".into(),
-    //                                     alias: None,
-    //                                 },
-    //                             ],
-    //                         ))),
-    //                         alias: None
-    //                     }],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea
-    //                     join tableb on (tablea.columna = tableb.columna)
-    //                     join tablec on (tablea.columna = tablec.columna);",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: None,
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![
-    //                         Node::Join {
-    //                             ty: JoinType::Inner,
-    //                             left: Rc::new(Node::TableRef("tablea".into())),
-    //                             right: Rc::new(Node::TableRef("tableb".into())),
-    //                             using: None,
-    //                             expr: Some(Box::new(Node::Expr(
-    //                                 Op::Eq,
-    //                                 vec![
-    //                                     Node::ColumnRef {
-    //                                         table: Some("tablea".into()),
-    //                                         column: "columna".into(),
-    //                                         alias: None,
-    //                                     },
-    //                                     Node::ColumnRef {
-    //                                         table: Some("tableb".into()),
-    //                                         column: "columna".into(),
-    //                                         alias: None,
-    //                                     },
-    //                                 ],
-    //                             ))),
-    //                             alias: None
-    //                         },
-    //                         Node::Join{
-    //                             ty: JoinType::Inner,
-    //                             left: Rc::new(Node::TableRef("tablea".into())),
-    //                             right: Rc::new(Node::TableRef("tablec".into())),
-    //                             using: None,
-    //                             expr: Some(Box::new(Node::Expr(
-    //                                 Op::Eq,
-    //                                 vec![
-    //                                     Node::ColumnRef {
-    //                                         table: Some("tablea".into()),
-    //                                         column: "columna".into(),
-    //                                         alias: None,
-    //                                     },
-    //                                     Node::ColumnRef {
-    //                                         table: Some("tablec".into()),
-    //                                         column: "columna".into(),
-    //                                         alias: None,
-    //                                     },
-    //                                 ],
-    //                             ))),
-    //                             alias: None
-    //                         },
-    //                     ],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea where columna not null;",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: Some(Box::new(Node::Expr(
-    //                         Op::Negation,
-    //                         vec![
-    //                             Node::ColumnRef {
-    //                                 table: None,
-    //                                 column: "columna".into(),
-    //                                 alias: None,
-    //                             },
-    //                             Node::Null,
-    //                         ],
-    //                     ))),
-    //                     group: vec![],
-    //                     order: vec![],
-    //                     joins: vec![],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea where columna not null group by columna, columnb order by columnb;",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: Some(Box::new(Node::Expr(
-    //                         Op::Negation,
-    //                         vec![
-    //                             Node::ColumnRef {
-    //                                 table: None,
-    //                                 column: "columna".into(),
-    //                                 alias: None,
-    //                             },
-    //                             Node::Null,
-    //                         ],
-    //                     ))),
-    //                     group: vec![
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columna".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnb".into(),
-    //                             alias: None
-    //                         }
-    //                     ],
-    //                     order: vec![Node::ColumnRef { table: None, column: "columnb".into(), alias: None }],
-    //                     joins: vec![],
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea
-    //                     join tableb using (columna)
-    //                     where columna > 1000 and columnb not in (1, 2, 3, 4)
-    //                     group by columna, columnb
-    //                     order by columnb
-    //                     limit 100;",
-    //                 want: Ok(Node::Select {
-    //                     columns: vec![Node::All],
-    //                     table: Rc::new(Node::TableRef("tablea".into())),
-    //                     r#where: Some(Box::new(Node::Expr(
-    //                         Op::Conjunction,
-    //                         vec![
-    //                             Node::Expr(
-    //                                 Op::Gt,
-    //                                 vec![
-    //                                     Node::ColumnRef {
-    //                                         table: None,
-    //                                         column: "columna".into(),
-    //                                         alias: None
-    //                                     },
-    //                                     Node::IntegerLiteral(1000)
-    //                                 ]),
-    //                             Node::Expr(
-    //                                 Op::Negation,
-    //                                 vec![
-    //                                     Node::ColumnRef {
-    //                                         table: None,
-    //                                         column: "columnb".into(),
-    //                                         alias: None
-    //                                     },
-    //                                     Node::Expr(
-    //                                         Op::In,
-    //                                         vec![
-    //                                             Node::IntegerLiteral(1),
-    //                                             Node::IntegerLiteral(2),
-    //                                             Node::IntegerLiteral(3),
-    //                                             Node::IntegerLiteral(4)
-    //                                         ]
-    //                                     )
-    //                                 ]
-    //                             )
-    //                         ]
-    //                     ))),
-    //                     group: vec![
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columna".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnb".into(),
-    //                             alias: None
-    //                         }
-    //                     ],
-    //                     order: vec![Node::ColumnRef { table: None, column: "columnb".into(), alias: None }],
-    //                     joins: vec![
-    //                         Node::Join {
-    //                             ty: JoinType::Inner,
-    //                             left: Rc::new(Node::TableRef("tablea".into())),
-    //                             right: Rc::new(Node::TableRef("tableb".into())),
-    //                             using: Some(vec![
-    //                                 Node::ColumnRef {
-    //                                     table: None,
-    //                                     column: "columna".into(),
-    //                                     alias: None
-    //                                 }
-    //                             ]),
-    //                             expr: None,
-    //                             alias: None,
-    //                         }
-    //                     ],
-    //                     limit: Some(Box::new(Node::IntegerLiteral(100))),
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea where columna > 1000 join tableb using (columna);",
-    //                 want: Err(Unexpected(Token::Join)),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join tableb using (columna) group by columna join tableb using (columna);",
-    //                 want: Err(Unexpected(Token::Join)),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join tableb using (columna) group by columna order by columna join tableb using (columna);",
-    //                 want: Err(Unexpected(Token::Join)),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join tableb using (columna) order by columna group by columna;",
-    //                 want: Err(Unexpected(Token::Group)),
-    //             },
-    //             Test {
-    //                 input: "select * from tablea join tableb using (columna) limit 100 group by columna;",
-    //                 want: Err(Unexpected(Token::Group)),
-    //             },
-    //             Test {
-    //                 input: "select columna, columnb, from tablea;",
-    //                 want: Err(Unexpected(Token::From)),
-    //             },
-    //             Test {
-    //                 input: "select columna, * from tablea;",
-    //                 want: Err(Unexpected(Token::All)),
-    //             },
-    //             Test {
-    //                 input: "select , columna, columnb from tablea;",
-    //                 want: Err(Unexpected(Token::Comma)),
-    //             },
-    //         ];
+    #[test]
+    fn test_parse_select() -> Result<()> {
+        let tcs = [
+                Test {
+                    input: "select * from tablea;",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select columna, columnb from tablea;",
+                    want: Ok(Node::Select {
+                        columns: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None,
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None,
+                            },
+                        ],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select columna, columnb, columnc from tablea;",
+                    want: Ok(Node::Select {
+                        columns: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None,
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None,
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnc".into(),
+                                alias: None,
+                            },
+                        ],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea join tableb using (columna, columnb);",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![Node::Join {
+                            ty: JoinType::Inner,
+                            left: Rc::new(Node::TableRef("tablea".into())),
+                            right: Rc::new(Node::TableRef("tableb".into())),
+                            using: Some(vec![
+                                Node::ColumnRef {
+                                    table: None,
+                                    column: "columna".into(),
+                                    alias: None,
+                                },
+                                Node::ColumnRef {
+                                    table: None,
+                                    column: "columnb".into(),
+                                    alias: None,
+                                },
+                            ]),
+                            expr: None,
+                            alias: None,
+                        }],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea join (select * from tableb) using (columna, columnb);",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![Node::Join {
+                            ty: JoinType::Inner,
+                            left: Rc::new(Node::TableRef("tablea".into())),
+                            right: Rc::new(Node::Select {
+                                columns: vec![Node::All],
+                                table: Rc::new(Node::TableRef("tableb".into())),
+                                r#where: None,
+                                group: vec![],
+                                order: vec![],
+                                joins: vec![],
+                                limit: None,
+                            }),
+                            using: Some(vec![
+                                Node::ColumnRef {
+                                    table: None,
+                                    column: "columna".into(),
+                                    alias: None,
+                                },
+                                Node::ColumnRef {
+                                    table: None,
+                                    column: "columnb".into(),
+                                    alias: None,
+                                },
+                            ]),
+                            expr: None,
+                            alias: None
+                        }],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea join (select * from tableb) on (1 = 1);",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![Node::Join {
+                            ty: JoinType::Inner,
+                            left: Rc::new(Node::TableRef("tablea".into())),
+                            right: Rc::new(Node::Select {
+                                columns: vec![Node::All],
+                                table: Rc::new(Node::TableRef("tableb".into())),
+                                r#where: None,
+                                group: vec![],
+                                order: vec![],
+                                joins: vec![],
+                                limit: None,
+                            }),
+                            using: None,
+                            expr: Some(Box::new(Node::Expr(
+                                Op::Eq,
+                                vec![
+                                    Node::IntegerLiteral(1),
+                                    Node::IntegerLiteral(1)
+                                ]
+                            ))),
+                            alias: None
+                        }],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea join tableb on (tablea.columna = tableb.columna);",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![Node::Join {
+                            ty: JoinType::Inner,
+                            left: Rc::new(Node::TableRef("tablea".into())),
+                            right: Rc::new(Node::TableRef("tableb".into())),
+                            using: None,
+                            expr: Some(Box::new(Node::Expr(
+                                Op::Eq,
+                                vec![
+                                    Node::ColumnRef {
+                                        table: Some("tablea".into()),
+                                        column: "columna".into(),
+                                        alias: None,
+                                    },
+                                    Node::ColumnRef {
+                                        table: Some("tableb".into()),
+                                        column: "columna".into(),
+                                        alias: None,
+                                    },
+                                ],
+                            ))),
+                            alias: None
+                        }],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea
+                        join tableb on (tablea.columna = tableb.columna)
+                        join tablec on (tablea.columna = tablec.columna);",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: None,
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![
+                            Node::Join {
+                                ty: JoinType::Inner,
+                                left: Rc::new(Node::TableRef("tablea".into())),
+                                right: Rc::new(Node::TableRef("tableb".into())),
+                                using: None,
+                                expr: Some(Box::new(Node::Expr(
+                                    Op::Eq,
+                                    vec![
+                                        Node::ColumnRef {
+                                            table: Some("tablea".into()),
+                                            column: "columna".into(),
+                                            alias: None,
+                                        },
+                                        Node::ColumnRef {
+                                            table: Some("tableb".into()),
+                                            column: "columna".into(),
+                                            alias: None,
+                                        },
+                                    ],
+                                ))),
+                                alias: None
+                            },
+                            Node::Join{
+                                ty: JoinType::Inner,
+                                left: Rc::new(Node::TableRef("tablea".into())),
+                                right: Rc::new(Node::TableRef("tablec".into())),
+                                using: None,
+                                expr: Some(Box::new(Node::Expr(
+                                    Op::Eq,
+                                    vec![
+                                        Node::ColumnRef {
+                                            table: Some("tablea".into()),
+                                            column: "columna".into(),
+                                            alias: None,
+                                        },
+                                        Node::ColumnRef {
+                                            table: Some("tablec".into()),
+                                            column: "columna".into(),
+                                            alias: None,
+                                        },
+                                    ],
+                                ))),
+                                alias: None
+                            },
+                        ],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea where columna is not null;",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: Some(Box::new(Node::Expr(
+                            Op::Negation,
+                            vec![
+                                Node::ColumnRef {
+                                    table: None,
+                                    column: "columna".into(),
+                                    alias: None,
+                                },
+                                Node::Null,
+                            ],
+                        ))),
+                        group: vec![],
+                        order: vec![],
+                        joins: vec![],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea where columna is not null group by columna, columnb order by columnb;",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: Some(Box::new(Node::Expr(
+                            Op::Negation,
+                            vec![
+                                Node::ColumnRef {
+                                    table: None,
+                                    column: "columna".into(),
+                                    alias: None,
+                                },
+                                Node::Null,
+                            ],
+                        ))),
+                        group: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None
+                            }
+                        ],
+                        order: vec![Node::ColumnRef { table: None, column: "columnb".into(), alias: None }],
+                        joins: vec![],
+                        limit: None,
+                    }),
+                },
+                Test {
+                    input: "select * from tablea
+                        join tableb using (columna)
+                        where columna > 1000 and columnb not in (1, 2, 3, 4)
+                        group by columna, columnb
+                        order by columnb
+                        limit 100;",
+                    want: Ok(Node::Select {
+                        columns: vec![Node::All],
+                        table: Rc::new(Node::TableRef("tablea".into())),
+                        r#where: Some(Box::new(Node::Expr(
+                            Op::Conjunction,
+                            vec![
+                                Node::Expr(
+                                    Op::Gt,
+                                    vec![
+                                        Node::ColumnRef {
+                                            table: None,
+                                            column: "columna".into(),
+                                            alias: None
+                                        },
+                                        Node::IntegerLiteral(1000)
+                                    ]),
+                                Node::Expr(
+                                    Op::NotIn,
+                                    vec![
+                                        Node::ColumnRef {
+                                            table: None,
+                                            column: "columnb".into(),
+                                            alias: None
+                                        },
+                                        Node::In(
+                                            vec![
+                                                Node::IntegerLiteral(1),
+                                                Node::IntegerLiteral(2),
+                                                Node::IntegerLiteral(3),
+                                                Node::IntegerLiteral(4)
+                                            ]
+                                        )
+                                    ]
+                                )
+                            ]
+                        ))),
+                        group: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None
+                            }
+                        ],
+                        order: vec![Node::ColumnRef { table: None, column: "columnb".into(), alias: None }],
+                        joins: vec![
+                            Node::Join {
+                                ty: JoinType::Inner,
+                                left: Rc::new(Node::TableRef("tablea".into())),
+                                right: Rc::new(Node::TableRef("tableb".into())),
+                                using: Some(vec![
+                                    Node::ColumnRef {
+                                        table: None,
+                                        column: "columna".into(),
+                                        alias: None
+                                    }
+                                ]),
+                                expr: None,
+                                alias: None,
+                            }
+                        ],
+                        limit: Some(Box::new(Node::IntegerLiteral(100))),
+                    }),
+                },
+                Test {
+                    input: "select * from tablea where columna > 1000 join tableb using (columna);",
+                    want: Err(Unexpected(Token::Join)),
+                },
+                Test {
+                    input: "select * from tablea join tableb using (columna) group by columna join tableb using (columna);",
+                    want: Err(Unexpected(Token::Join)),
+                },
+                Test {
+                    input: "select * from tablea join tableb using (columna) group by columna order by columna join tableb using (columna);",
+                    want: Err(Unexpected(Token::Join)),
+                },
+                Test {
+                    input: "select * from tablea join tableb using (columna) order by columna group by columna;",
+                    want: Err(Unexpected(Token::Group)),
+                },
+                Test {
+                    input: "select * from tablea join tableb using (columna) limit 100 group by columna;",
+                    want: Err(Unexpected(Token::Group)),
+                },
+                Test {
+                    input: "select columna, columnb, from tablea;",
+                    want: Err(Unexpected(Token::From)),
+                },
+                Test {
+                    input: "select columna, * from tablea;",
+                    want: Err(Unexpected(Token::All)),
+                },
+                Test {
+                    input: "select , columna, columnb from tablea;",
+                    want: Err(Unexpected(Token::Comma)),
+                },
+            ];
 
-    //         for Test { input, want } in tcs {
-    //             let mut l = Lexer::new(input);
-    //             let have = select(&mut l);
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = select(&mut l);
 
-    //             assert_eq!(want, have, "{}", input);
-    //         }
+            assert_eq!(want, have, "{}", input);
+        }
 
-    //         Ok(())
-    //     }
+        Ok(())
+    }
 
-    //     #[test]
-    //     fn test_parse_insert() -> Result<()> {
-    //         let tcs = [
-    //             Test {
-    //                 input: "insert into tablea values (\"test\", 1, \"insert\", 2);",
-    //                 want: Ok(Node::Insert {
-    //                     columns: vec![],
-    //                     table: Box::new(Node::TableRef("tablea".into())),
-    //                     inserts: vec![vec![
-    //                         Node::StringLiteral("test".into()),
-    //                         Node::IntegerLiteral(1),
-    //                         Node::StringLiteral("insert".into()),
-    //                         Node::IntegerLiteral(2),
-    //                     ]],
-    //                 })
-    //             },
-    //             Test {
-    //                 input: "insert into tablea (columna, columnb, columnc, columnd) values (\"test\", 1, \"insert\", 2);",
-    //                 want: Ok(Node::Insert {
-    //                     columns: vec![
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columna".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnb".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnc".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnd".into(),
-    //                             alias: None
-    //                         },
-    //                     ],
-    //                     table: Box::new(Node::TableRef("tablea".into())),
-    //                     inserts: vec![vec![
-    //                         Node::StringLiteral("test".into()),
-    //                         Node::IntegerLiteral(1),
-    //                         Node::StringLiteral("insert".into()),
-    //                         Node::IntegerLiteral(2),
-    //                     ]],
-    //                 })
-    //             },
-    //             Test {
-    //                 input: "insert into tablea (columna, columnb, columnc, columnd)
-    //                     values (\"test\", 1, \"insert\", 2),
-    //                     (\"insert\", 2, \"test\", 1);",
-    //                 want: Ok(Node::Insert {
-    //                     columns: vec![
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columna".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnb".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnc".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnd".into(),
-    //                             alias: None
-    //                         },
-    //                     ],
-    //                     table: Box::new(Node::TableRef("tablea".into())),
-    //                     inserts: vec![
-    //                         vec![
-    //                             Node::StringLiteral("test".into()),
-    //                             Node::IntegerLiteral(1),
-    //                             Node::StringLiteral("insert".into()),
-    //                             Node::IntegerLiteral(2),
-    //                         ],
-    //                         vec![
-    //                             Node::StringLiteral("insert".into()),
-    //                             Node::IntegerLiteral(2),
-    //                             Node::StringLiteral("test".into()),
-    //                             Node::IntegerLiteral(1),
-    //                         ]
-    //                     ],
-    //                 })
-    //             },
-    //             Test {
-    //                 input: "insert tablea (columna, columnb) values (1, NULL)",
-    //                 want: Ok(Node::Insert{
-    //                     columns: vec![
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columna".into(),
-    //                             alias: None
-    //                         },
-    //                         Node::ColumnRef {
-    //                             table: None,
-    //                             column: "columnb".into(),
-    //                             alias: None
-    //                         },
-    //                     ],
-    //                     table: Box::new(Node::TableRef("tablea".into())),
-    //                     inserts: vec![
-    //                         vec![
-    //                             Node::IntegerLiteral(1),
-    //                             Node::Null,
-    //                         ],
-    //                     ],
-    //                 }),
-    //             }
-    //         ];
+    #[test]
+    fn test_parse_insert() -> Result<()> {
+        let tcs = [
+                Test {
+                    input: "insert into tablea values (\"test\", 1, \"insert\", 2);",
+                    want: Ok(Node::Insert {
+                        columns: vec![],
+                        table: Box::new(Node::TableRef("tablea".into())),
+                        inserts: vec![vec![
+                            Node::StringLiteral("test".into()),
+                            Node::IntegerLiteral(1),
+                            Node::StringLiteral("insert".into()),
+                            Node::IntegerLiteral(2),
+                        ]],
+                    })
+                },
+                Test {
+                    input: "insert into tablea (columna, columnb, columnc, columnd) values (\"test\", 1, \"insert\", 2);",
+                    want: Ok(Node::Insert {
+                        columns: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnc".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnd".into(),
+                                alias: None
+                            },
+                        ],
+                        table: Box::new(Node::TableRef("tablea".into())),
+                        inserts: vec![vec![
+                            Node::StringLiteral("test".into()),
+                            Node::IntegerLiteral(1),
+                            Node::StringLiteral("insert".into()),
+                            Node::IntegerLiteral(2),
+                        ]],
+                    })
+                },
+                Test {
+                    input: "insert into tablea (columna, columnb, columnc, columnd)
+                        values (\"test\", 1, \"insert\", 2),
+                        (\"insert\", 2, \"test\", 1);",
+                    want: Ok(Node::Insert {
+                        columns: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnc".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnd".into(),
+                                alias: None
+                            },
+                        ],
+                        table: Box::new(Node::TableRef("tablea".into())),
+                        inserts: vec![
+                            vec![
+                                Node::StringLiteral("test".into()),
+                                Node::IntegerLiteral(1),
+                                Node::StringLiteral("insert".into()),
+                                Node::IntegerLiteral(2),
+                            ],
+                            vec![
+                                Node::StringLiteral("insert".into()),
+                                Node::IntegerLiteral(2),
+                                Node::StringLiteral("test".into()),
+                                Node::IntegerLiteral(1),
+                            ]
+                        ],
+                    })
+                },
+                Test {
+                    input: "insert tablea (columna, columnb) values (1, NULL)",
+                    want: Ok(Node::Insert{
+                        columns: vec![
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columna".into(),
+                                alias: None
+                            },
+                            Node::ColumnRef {
+                                table: None,
+                                column: "columnb".into(),
+                                alias: None
+                            },
+                        ],
+                        table: Box::new(Node::TableRef("tablea".into())),
+                        inserts: vec![
+                            vec![
+                                Node::IntegerLiteral(1),
+                                Node::Null,
+                            ],
+                        ],
+                    }),
+                }
+            ];
 
-    //         for Test { input, want } in tcs {
-    //             let mut l = Lexer::new(input);
-    //             let have = insert(&mut l);
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = insert(&mut l);
 
-    //             assert_eq!(want, have);
-    //         }
+            assert_eq!(want, have);
+        }
 
-    //         Ok(())
-    //     }
+        Ok(())
+    }
 
-    //     #[test]
-    //     fn test_parse_create() {
-    //         let tcs = [
-    //             Test {
-    //                 input: "create table tablea (
-    //                     columna int
-    //                 )",
-    //                 want: Ok(Node::Create {
-    //                     table: "tablea".into(),
-    //                     columns: vec![Node::ColumnDef {
-    //                         column: "columna".into(),
-    //                         ty: Type::Int,
-    //                     }],
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "create table tablea (
-    //                     columna int,
-    //                     columnb int
-    //                 )",
-    //                 want: Ok(Node::Create {
-    //                     table: "tablea".into(),
-    //                     columns: vec![
-    //                         Node::ColumnDef {
-    //                             column: "columna".into(),
-    //                             ty: Type::Int,
-    //                         },
-    //                         Node::ColumnDef {
-    //                             column: "columnb".into(),
-    //                             ty: Type::Int,
-    //                         },
-    //                     ],
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "create table tablea (
-    //                     columna int,
-    //                     columnb varchar(255),
-    //                     columnc int
-    //                 )",
-    //                 want: Ok(Node::Create {
-    //                     table: "tablea".into(),
-    //                     columns: vec![
-    //                         Node::ColumnDef {
-    //                             column: "columna".into(),
-    //                             ty: Type::Int,
-    //                         },
-    //                         Node::ColumnDef {
-    //                             column: "columnb".into(),
-    //                             ty: Type::Varchar(Box::new(Node::IntegerLiteral(255))),
-    //                         },
-    //                         Node::ColumnDef {
-    //                             column: "columnc".into(),
-    //                             ty: Type::Int,
-    //                         },
-    //                     ],
-    //                 }),
-    //             },
-    //         ];
+    #[test]
+    fn test_parse_create() {
+        let tcs = [
+            Test {
+                input: "create table tablea (
+                        columna int
+                    )",
+                want: Ok(Node::Create {
+                    table: "tablea".into(),
+                    columns: vec![Node::ColumnDef {
+                        column: "columna".into(),
+                        ty: Type::Int,
+                    }],
+                }),
+            },
+            Test {
+                input: "create table tablea (
+                        columna int,
+                        columnb int
+                    )",
+                want: Ok(Node::Create {
+                    table: "tablea".into(),
+                    columns: vec![
+                        Node::ColumnDef {
+                            column: "columna".into(),
+                            ty: Type::Int,
+                        },
+                        Node::ColumnDef {
+                            column: "columnb".into(),
+                            ty: Type::Int,
+                        },
+                    ],
+                }),
+            },
+            Test {
+                input: "create table tablea (
+                        columna int,
+                        columnb varchar(255),
+                        columnc int
+                    )",
+                want: Ok(Node::Create {
+                    table: "tablea".into(),
+                    columns: vec![
+                        Node::ColumnDef {
+                            column: "columna".into(),
+                            ty: Type::Int,
+                        },
+                        Node::ColumnDef {
+                            column: "columnb".into(),
+                            ty: Type::Varchar(Box::new(Node::IntegerLiteral(255))),
+                        },
+                        Node::ColumnDef {
+                            column: "columnc".into(),
+                            ty: Type::Int,
+                        },
+                    ],
+                }),
+            },
+        ];
 
-    //         for Test { input, want } in tcs {
-    //             let mut l = Lexer::new(input);
-    //             let have = create(&mut l);
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = create(&mut l);
 
-    //             assert_eq!(want, have)
-    //         }
-    //     }
+            assert_eq!(want, have)
+        }
+    }
 
-    //     #[test]
-    //     fn test_parse_delete() {
-    //         let tcs = [
-    //             Test {
-    //                 input: "delete from tablea",
-    //                 want: Ok(Node::Delete {
-    //                     table: "tablea".into(),
-    //                     r#where: None,
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "delete from tablea where 1 = 1",
-    //                 want: Ok(Node::Delete {
-    //                     table: "tablea".into(),
-    //                     r#where: Some(Box::new(Node::Expr(
-    //                         Op::Eq,
-    //                         vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
-    //                     ))),
-    //                     limit: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "delete from tablea where 1 = 1 limit 1000",
-    //                 want: Ok(Node::Delete {
-    //                     table: "tablea".into(),
-    //                     r#where: Some(Box::new(Node::Expr(
-    //                         Op::Eq,
-    //                         vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
-    //                     ))),
-    //                     limit: Some(Box::new(Node::IntegerLiteral(1000))),
-    //                 }),
-    //             },
-    //         ];
+    #[test]
+    fn test_parse_delete() {
+        let tcs = [
+            Test {
+                input: "delete from tablea",
+                want: Ok(Node::Delete {
+                    table: "tablea".into(),
+                    r#where: None,
+                    limit: None,
+                }),
+            },
+            Test {
+                input: "delete from tablea where 1 = 1",
+                want: Ok(Node::Delete {
+                    table: "tablea".into(),
+                    r#where: Some(Box::new(Node::Expr(
+                        Op::Eq,
+                        vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
+                    ))),
+                    limit: None,
+                }),
+            },
+            Test {
+                input: "delete from tablea where 1 = 1 limit 1000",
+                want: Ok(Node::Delete {
+                    table: "tablea".into(),
+                    r#where: Some(Box::new(Node::Expr(
+                        Op::Eq,
+                        vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
+                    ))),
+                    limit: Some(Box::new(Node::IntegerLiteral(1000))),
+                }),
+            },
+        ];
 
-    //         for Test { input, want } in tcs {
-    //             let mut l = Lexer::new(input);
-    //             let have = delete(&mut l);
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = delete(&mut l);
 
-    //             assert_eq!(want, have)
-    //         }
-    //     }
+            assert_eq!(want, have)
+        }
+    }
 
-    //     #[test]
-    //     fn test_parse_update() {
-    //         let tcs = [
-    //             Test {
-    //                 input: "update tablea set columna = 10",
-    //                 want: Ok(Node::Update {
-    //                     table: "tablea".into(),
-    //                     assignments: vec![Node::Assignment {
-    //                         column: "columna".into(),
-    //                         value: Box::new(Node::IntegerLiteral(10)),
-    //                     }],
-    //                     r#where: None,
-    //                 }),
-    //             },
-    //             Test {
-    //                 input: "update tablea set columna = 10, columnb = \"test\" where 1 = 1",
-    //                 want: Ok(Node::Update {
-    //                     table: "tablea".into(),
-    //                     assignments: vec![
-    //                         Node::Assignment {
-    //                             column: "columna".into(),
-    //                             value: Box::new(Node::IntegerLiteral(10)),
-    //                         },
-    //                         Node::Assignment {
-    //                             column: "columnb".into(),
-    //                             value: Box::new(Node::StringLiteral("test".into())),
-    //                         },
-    //                     ],
-    //                     r#where: Some(Box::new(Node::Expr(
-    //                         Op::Eq,
-    //                         vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
-    //                     ))),
-    //                 }),
-    //             },
-    //         ];
+    #[test]
+    fn test_parse_update() {
+        let tcs = [
+            Test {
+                input: "update tablea set columna = 10",
+                want: Ok(Node::Update {
+                    table: "tablea".into(),
+                    assignments: vec![Node::Assignment {
+                        column: "columna".into(),
+                        value: Box::new(Node::IntegerLiteral(10)),
+                    }],
+                    r#where: None,
+                }),
+            },
+            Test {
+                input: "update tablea set columna = 10, columnb = \"test\" where 1 = 1",
+                want: Ok(Node::Update {
+                    table: "tablea".into(),
+                    assignments: vec![
+                        Node::Assignment {
+                            column: "columna".into(),
+                            value: Box::new(Node::IntegerLiteral(10)),
+                        },
+                        Node::Assignment {
+                            column: "columnb".into(),
+                            value: Box::new(Node::StringLiteral("test".into())),
+                        },
+                    ],
+                    r#where: Some(Box::new(Node::Expr(
+                        Op::Eq,
+                        vec![Node::IntegerLiteral(1), Node::IntegerLiteral(1)],
+                    ))),
+                }),
+            },
+        ];
 
-    //         for Test { input, want } in tcs {
-    //             let mut l = Lexer::new(input);
-    //             let have = update(&mut l);
+        for Test { input, want } in tcs {
+            let mut l = Lexer::new(input);
+            let have = update(&mut l);
 
-    //             assert_eq!(want, have)
-    //         }
-    //     }
+            assert_eq!(want, have)
+        }
+    }
 }

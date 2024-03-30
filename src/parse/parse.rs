@@ -386,14 +386,8 @@ fn expr(l: &mut Lexer) -> Result<Node> {
 
         loop {
             let op = match l.peek() {
-                t if is_infix(&t) => t.into(),
-                // could have is_isornot
-                _ => break,
-            };
-
-            // if op = not, check if not in, not between
-            let op = match op {
-                Op::Negation => {
+                // some operators can consist of multiple tokens
+                Token::Negation => {
                     l.next();
                     let op = match l.peek() {
                         t if is_infix(&t) => t.into(),
@@ -406,9 +400,11 @@ fn expr(l: &mut Lexer) -> Result<Node> {
                         _ => Err(Unexpected(l.peek()))?,
                     }
                 }
-                op => op,
+                t if is_infix(&t) => t.into(),
+                _ => break,
             };
 
+            // change the state if needed to ensure operands are parsed correctly
             match op {
                 Op::Between | Op::NotBetween => state = State::Between,
                 Op::In | Op::NotIn => state = State::In,

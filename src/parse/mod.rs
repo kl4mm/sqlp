@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::{Lexer, Token};
+use crate::lexer::{Lexer, Token};
 
 pub mod parse;
 
@@ -264,8 +264,16 @@ macro_rules! check_next {
     };
 }
 
+impl TryFrom<&str> for Node {
+    type Error = Unexpected;
+
+    fn try_from(input: &str) -> std::prelude::v1::Result<Self, Self::Error> {
+        parse(&mut Lexer::new(input))
+    }
+}
+
 // TODO: Support unions
-pub fn query(l: &mut Lexer) -> Result<Node> {
+fn parse(l: &mut Lexer) -> Result<Node> {
     let q = match l.peek() {
         Token::Create => self::parse::create(l),
         Token::Select => self::parse::select(l),

@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     check_next,
+    lexer::{Lexer, Token},
     parse::{JoinType, Node, Op, Result, Type, Unexpected},
-    Lexer, Token,
 };
 
 pub fn select(l: &mut Lexer) -> Result<Node> {

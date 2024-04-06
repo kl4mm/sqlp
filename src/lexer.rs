@@ -262,9 +262,7 @@ fn chop(src: &str) -> &str {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::Lexer;
-
-    use super::{chop, Token};
+    use super::{chop, Lexer, Token};
 
     #[test]
     fn test_tokenise() {

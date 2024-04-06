@@ -1,8 +1,6 @@
 use std::rc::Rc;
 
-use crate::lexer::{Lexer, Token};
-
-pub mod parse;
+use super::lexer::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum Op {
@@ -219,7 +217,7 @@ impl std::fmt::Display for Node {
 }
 
 #[derive(PartialEq)]
-pub struct Unexpected(Token);
+pub struct Unexpected(pub Token);
 
 impl std::fmt::Display for Unexpected {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -235,7 +233,7 @@ impl std::fmt::Debug for Unexpected {
 
 impl std::error::Error for Unexpected {}
 
-type Result<T> = std::result::Result<T, Unexpected>;
+pub type Result<T> = std::result::Result<T, Unexpected>;
 
 #[macro_export]
 macro_rules! check_next {
@@ -262,29 +260,4 @@ macro_rules! check_next {
             )?
         )*
     };
-}
-
-impl TryFrom<&str> for Node {
-    type Error = Unexpected;
-
-    fn try_from(input: &str) -> std::prelude::v1::Result<Self, Self::Error> {
-        parse(&mut Lexer::new(input))
-    }
-}
-
-// TODO: Support unions
-fn parse(l: &mut Lexer) -> Result<Node> {
-    let q = match l.peek() {
-        Token::Create => self::parse::create(l),
-        Token::Select => self::parse::select(l),
-        Token::Insert => self::parse::insert(l),
-        Token::Update => self::parse::update(l),
-        Token::Delete => self::parse::delete(l),
-        t => Err(Unexpected(t)),
-    };
-
-    match l.next() {
-        Token::Semicolon => q,
-        t => Err(Unexpected(t)),
-    }
 }
